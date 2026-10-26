@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "optica-core"
+version = "0.1.0"
+description = "Shared backend core of the Optica viewers: Flask app factory and common routes"
+license = { text = "GPL-3.0-or-later" }
+requires-python = ">=3.10"
+dependencies = ["flask>=3.0", "flask-cors>=4.0"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.setuptools]
+packages = ["optica_core"]
