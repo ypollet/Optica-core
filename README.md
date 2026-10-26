@@ -19,9 +19,8 @@ Every backend serves these routes; the frontend data layer (`src/data/providers/
 | `GET /<id>/<image>/full-image`  | image file, `Dataset.full_image()`             |
 | `GET /<id>/<image>/thumbnail`   | thumbnail file, `Dataset.thumbnail()`          |
 | `GET /<id>/<image>/position?x&y`| physical position, `Dataset.position()`        |
-| `GET /<id>/position?x&y`        | same, kept for clients that don't send `image` |
 
-App-specific routes (`profile`, `triangulate`, `reproject`, `shortcuts`) stay in each app and are added on the app returned by `create_app` (see `depth-core/app.py`). On the frontend, `provider.imageUrl(objectPath, image, "profile")` gives the url of a route about one image for both providers (WEB: `<id>/<image>/profile`, Orthanc: `/<plugin>/<image>/profile`).
+App-specific routes stay in each app and are added on the app returned by `create_app` (see `depth-core/app.py`). On the frontend, `provider.imageUrl(objectPath, image, "profile")` gives the url of a route about one image for both providers (WEB: `<id>/<image>/profile`, Orthanc: `/<plugin>/<image>/profile`).
 
 ### Backend usage
 
@@ -112,7 +111,7 @@ A `Project` (an object) has one or many `Acquisition`s. An acquisition holds the
 | --- | --- | --- | --- |
 | stack | 1 | the stack, by slice | the stacked results (`individualImages`) |
 | polar | 1 | the rotation, by angle | — |
-| spectral | one per group (`VIS`, `UV`...) | `spectralImages` | `individualImages` |
+| spectral | one per view | images ordered by the wavelength of the light | specific images (like "White" or "VIL") |
 | sphaer | 1 | the sphere of views | — |
 | depth | one per depth image (each its own coordinate space) | — | the depth image, with its `size` |
 
@@ -197,7 +196,7 @@ import { ThumbnailViewer } from "@optica/core/ui/thumbnail-viewer"
 
 How each app maps on it:
 
-- **spectral**: `:editable="false"`.
+- **spectral**: .
 - **stack**: as above, `:editable="imagesStore.image == 'stack'"`.
 - **polar**: `:can-drag="(l) => annotations.canMoveTo(l, angle)"`, `@select` switches the sidebar tab.
 - **depth** (see `depth-core/src/components/DepthViewer.vue`): profiles' ends go in `extraLandmarks` and are drawn with `draw` (line, triangle end, ticks, hover position); `@move` recomputes the profile when the landmark belongs to one; the profiles are watched to call the exposed `update()` (the hover of the chart is not a landmark change).

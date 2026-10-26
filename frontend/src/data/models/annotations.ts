@@ -16,7 +16,7 @@ export type AnnotationsSelection = {
     selectedDistanceIndex: number
 }
 
-export const ANNOTATIONS_CSV_HEADER = ["Group", "Group Label", "LandmarkLabel", "Color", "Pose_X", "Pose_Y", "Image", "ImageLabel", "X", "Y", "Z"]
+export const ANNOTATIONS_CSV_HEADER = ["Group", "Group Label", "Landmark Label", "Color", "Pose_X", "Pose_Y", "Image", "ImageLabel", "X", "Y", "Z"]
 
 // one CSV row (ANNOTATIONS_CSV_HEADER), `group`: label of the distance or profile of the landmark
 export function landmarkCSVRow(type: string, group: string, landmark: Landmark): string[] {

@@ -126,7 +126,7 @@ export class Acquisition<TImage extends ProjectImage> {
 }
 
 // An object and its acquisitions
-export class Project<TImage extends ProjectImage, TAcquisition extends Acquisition<TImage>> {
+export class Project<TImage extends ProjectImage = ProjectImage, TAcquisition extends Acquisition<TImage> = Acquisition<TImage>> {
     objectPath: string
     acquisitions: TAcquisition[]
     // position in acquisitions
