@@ -104,7 +104,7 @@ function showInput(event: MouseEvent) {
 
 <template>
   <div class="flex flex-col space-y-3">
-    <div class="flex pr-2 py-2 border-transparent border-2">
+    <div class="flex pr-2 border-transparent border-2">
       <div class="flex grow row justify-between items-center pr-3 py-2">
         <div class="flex grow row w-full justify-start items-center space-x-3 mr-3">
           <input type="color"
@@ -151,12 +151,14 @@ function showInput(event: MouseEvent) {
         </template>
       </draggable>
     </div>
-    <div v-if="selected" class="flex row justify-between space-x-3">
-      <SelectScale v-model="scale" :units="units" />
+    <div class="flex row justify-between">
       <div class="flex row space-x-1">
         <Label class="flex whitespace-nowrap w-auto items-center">Distance :</Label>
         <Label class="flex whitespace-nowrap w-auto items-center">{{ length }} {{ scale }}</Label>
       </div>
+      <SelectScale v-if="selected" v-model="scale" :units="units" />
+      <div v-else />
+      
     </div>
   </div>
 </template>

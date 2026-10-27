@@ -37,6 +37,8 @@ const emit = defineEmits<{
 defineSlots<{
   // content of the "How to use ?" dialog, the item is hidden without it
   'help-guide'?(): any
+  // replaces the default content of the Credits dialog (e.g. Credits with a header)
+  credits?(): any
   // extra menus after Settings
   menus?(): any
 }>()
@@ -64,7 +66,7 @@ function onSubmit(event: Event) {
       <MenubarMenu>
         <MenubarTrigger class="relative">File</MenubarTrigger>
         <MenubarContent>
-          <MenubarLabel>Landmarks</MenubarLabel>
+          <MenubarLabel>Annotations</MenubarLabel>
           <MenubarItem inset :disabled="!importable" @select="importOpen = true">Import</MenubarItem>
           <MenubarSub>
             <MenubarSubTrigger inset :disabled="!exportable">Export</MenubarSubTrigger>
@@ -98,11 +100,11 @@ function onSubmit(event: Event) {
         </MenubarContent>
       </MenubarMenu>
       <slot name="menus" />
-      <MenubarMenu v-if="$slots['help-guide'] || credits">
+      <MenubarMenu v-if="$slots['help-guide'] || credits || $slots.credits">
         <MenubarTrigger>Help</MenubarTrigger>
         <MenubarContent>
           <MenubarItem v-if="$slots['help-guide']" inset @select="helpOpen = true">How to use ?</MenubarItem>
-          <MenubarItem v-if="credits" inset @select="creditsOpen = true">Credits</MenubarItem>
+          <MenubarItem v-if="credits || $slots.credits" inset @select="creditsOpen = true">Credits</MenubarItem>
         </MenubarContent>
       </MenubarMenu>
     </Menubar>
@@ -110,12 +112,12 @@ function onSubmit(event: Event) {
     <Dialog v-model:open="importOpen">
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add the landmark file</DialogTitle>
-          <DialogDescription>Add the json files containing the landmarks</DialogDescription>
+          <DialogTitle>Add the annotations file</DialogTitle>
+          <DialogDescription>Add the json files containing the annotations</DialogDescription>
         </DialogHeader>
         <form @submit="onSubmit">
           <Label>File</Label>
-          <Input type="file" accept=".json,application/json" placeholder="your landmark json file" />
+          <Input type="file" accept=".json,application/json" placeholder="your annotation json file" />
           <DialogFooter>
             <DialogClose as-child>
               <Button type="submit">Confirm</Button>
@@ -126,7 +128,7 @@ function onSubmit(event: Event) {
     </Dialog>
 
     <Dialog v-if="$slots['help-guide']" v-model:open="helpOpen">
-      <DialogContent class="flex h-[85vh] w-[50vw] max-w-none flex-col overflow-hidden">
+      <DialogContent class="flex h-[85vh] w-[50vw] max-w-none sm:max-w-none flex-col overflow-hidden">
         <DialogHeader class="shrink-0">
           <DialogTitle>App guide</DialogTitle>
           <DialogDescription>Quick instructions for {{ appName }}.</DialogDescription>
@@ -137,14 +139,16 @@ function onSubmit(event: Event) {
       </DialogContent>
     </Dialog>
 
-    <Dialog v-if="credits" v-model:open="creditsOpen">
-      <DialogContent class="flex h-[85vh] w-[50vw] max-w-none flex-col overflow-hidden">
+    <Dialog v-if="credits || $slots.credits" v-model:open="creditsOpen">
+      <DialogContent class="flex h-[85vh] w-[50vw] max-w-none sm:max-w-none flex-col overflow-hidden">
         <DialogHeader class="shrink-0">
           <DialogTitle>Credits</DialogTitle>
           <DialogDescription>Thank to everyone that contributed to this project</DialogDescription>
         </DialogHeader>
         <div class="min-h-0 h-full w-full flex-1 overflow-y-auto overflow-x-hidden">
-          <Credits v-bind="props.credits" />
+          <slot name="credits">
+            <Credits v-bind="props.credits" />
+          </slot>
         </div>
       </DialogContent>
     </Dialog>

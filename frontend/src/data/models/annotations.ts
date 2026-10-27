@@ -22,8 +22,8 @@ export const ANNOTATIONS_CSV_HEADER = ["Group", "Group Label", "Landmark Label",
 export function landmarkCSVRow(type: string, group: string, landmark: Landmark): string[] {
     const { marker, image } = landmark.pose
     const position = landmark.position
-    return [type, group, landmark.label, landmark.getColorHEX(), marker.x.toString(), marker.y.toString(),
-        image.name, image.label, position.x.toString(), position.y.toString(), position.z?.toString() ?? ""]
+    return [type, group, landmark.label, landmark.getColorHEX(), marker.x.toFixed(5).toString(), marker.y.toFixed(5).toString(),
+        image.name, image.label, position.x.toFixed(5).toString(), position.y.toFixed(5).toString(), position.z?.toFixed(5).toString() ?? ""]
 }
 
 // Landmarks and distances of an acquisition: all its images (group and standalone) share

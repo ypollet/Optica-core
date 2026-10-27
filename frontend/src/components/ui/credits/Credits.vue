@@ -12,6 +12,11 @@ const props = withDefaults(defineProps<CreditsContent>(), {
   institutions: () => [],
 })
 
+defineSlots<{
+  // shown above the developers (e.g. the viewer's logo and name)
+  header?(): any
+}>()
+
 function initials(name: string): string {
   return name
     .split(/\s+/)
@@ -29,6 +34,10 @@ const isDark = useDark({
 <template>
   <Card class="flex h-full min-h-full w-full max-w-full min-w-0 overflow-x-hidden overflow-y-auto">
     <CardContent class="flex flex-col w-full min-w-0 space-y-6 p-6">
+      <section v-if="$slots.header">
+        <slot name="header" />
+      </section>
+
       <!-- Developers -->
       <section v-if="props.developers.length > 0">
         <h4 class="text-base font-semibold">Developers</h4>
