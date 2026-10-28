@@ -1,13 +1,19 @@
-import { isScaleUnit, type ScaleUnit } from "../../lib/utils"
+import { round } from "mathjs"
+import { adjustFactorFor, isScaleUnit, randomID, ROUNDING, Scale, toScale, type ScaleUnit } from "../../lib/utils"
 import { Distance, type DistanceObject } from "./distance"
 import { Landmark, type LandmarkObject } from "./landmark"
+
+// Saved form of a distance of the annotations: with its length shown in the scale of the annotations (not read back)
+export type DistanceAnnotationObject = DistanceObject & {
+    value: number
+}
 
 // Saved form of the annotations of an acquisition (scale_factor: key of the first polar exports)
 export type AnnotationsObject = {
     scale_factor: number
     scale?: ScaleUnit
     landmarks: LandmarkObject[]
-    distances: DistanceObject[]
+    distances: DistanceAnnotationObject[]
 }
 
 // Sidebar state of the annotations: kept across reloads, not exported
@@ -51,7 +57,7 @@ export class Annotations {
         const used = new Set(this.allLandmarks.map((landmark) => landmark.id))
         let id: string
         do {
-            id = (Math.random() + 1).toString(36).substring(2)
+            id = randomID()
         } while (used.has(id))
         return id
     }
@@ -66,6 +72,19 @@ export class Annotations {
         const index = this.distances.push(new Distance("Distance " + (this.distances.length + 1))) - 1
         this.selectedDistanceIndex = index
         return this.distances[index]!
+    }
+
+    // length in image units shown in the current scale, corrected by the calibration and rounded
+    scaled(length: number): number {
+        return round(toScale(length, this.adjustFactor) / Scale[this.scale], ROUNDING)
+    }
+
+    // typing a known length on a distance calibrates the coordinate space
+    calibrate(distance: Distance, target: number) {
+        const value = distance.length(this.scale)
+        if (value && target > 0) {
+            this.adjustFactor = adjustFactorFor(value, target, this.scale)
+        }
     }
 
     removeLandmark(id: string) {
@@ -91,7 +110,10 @@ export class Annotations {
             scale_factor: this.adjustFactor,
             scale: this.scale,
             landmarks: this.landmarks.map((landmark) => landmark.toJSON()),
-            distances: this.distances.map((distance) => distance.toJSON()),
+            distances: this.distances.map((distance) => ({
+                ...distance.toJSON(),
+                value: this.scaled(distance.length(this.scale) ?? 0),
+            })),
         }
     }
 
@@ -100,7 +122,7 @@ export class Annotations {
     protected claimIDs(landmarks: Landmark[], used: Set<string>) {
         landmarks.forEach((landmark) => {
             while (used.has(landmark.id)) {
-                landmark.id = (Math.random() + 1).toString(36).substring(2)
+                landmark.id = randomID()
             }
             used.add(landmark.id)
         })

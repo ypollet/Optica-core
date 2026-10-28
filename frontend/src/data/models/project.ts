@@ -3,7 +3,7 @@ import { createCamera, type Camera } from "./camera"
 import type { ProjectImage, Size } from "./image"
 
 // One acquisition as sent by the backend
-export type AcquisitionObject<TImage extends ProjectImage> = {
+export type AcquisitionObject<TImage extends ProjectImage = ProjectImage> = {
     id: string
     label?: string
     // images taken together, in order: the stack, the rotation, the spectral images, the sphere of views
@@ -15,7 +15,7 @@ export type AcquisitionObject<TImage extends ProjectImage> = {
 }
 
 // Images taken together, with the viewer state and the annotations of the acquisition
-export class Acquisition<TImage extends ProjectImage> {
+export class Acquisition<TImage extends ProjectImage = ProjectImage> {
     id: string
     label: string
     images: TImage[]

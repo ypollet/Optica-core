@@ -5,10 +5,16 @@ import { reactiveOmit } from "@vueuse/core"
 import { cn } from "../../../lib/utils"
 import { SliderRange, SliderRoot, SliderThumb, SliderTrack, useForwardPropsEmits } from "reka-ui"
 
-const props = defineProps<SliderRootProps & { class?: HTMLAttributes["class"] }>()
+const props = defineProps<SliderRootProps & {
+  class?: HTMLAttributes["class"]
+  // e.g. bg-transparent to show what is behind the slider (spectral: the colours of the wavelengths)
+  trackClass?: HTMLAttributes["class"]
+  rangeClass?: HTMLAttributes["class"]
+  thumbClass?: HTMLAttributes["class"]
+}>()
 const emits = defineEmits<SliderRootEmits>()
 
-const delegatedProps = reactiveOmit(props, "class")
+const delegatedProps = reactiveOmit(props, "class", "trackClass", "rangeClass", "thumbClass")
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
 </script>
@@ -25,11 +31,14 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
   >
     <SliderTrack
       data-slot="slider-track"
-      class="bg-muted relative grow overflow-hidden rounded-full data-[orientation=horizontal]:h-1.5 data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-1.5"
+      :class="cn(
+        'bg-muted relative grow overflow-hidden rounded-full data-[orientation=horizontal]:h-1.5 data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-1.5',
+        props.trackClass,
+      )"
     >
       <SliderRange
         data-slot="slider-range"
-        class="bg-primary absolute data-[orientation=horizontal]:h-full data-[orientation=vertical]:w-full"
+        :class="cn('bg-primary absolute data-[orientation=horizontal]:h-full data-[orientation=vertical]:w-full', props.rangeClass)"
       />
     </SliderTrack>
 
@@ -37,7 +46,10 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
       v-for="(_, key) in modelValue"
       :key="key"
       data-slot="slider-thumb"
-      class="bg-white border-primary ring-ring/50 block size-4 shrink-0 rounded-full border shadow-sm transition-[color,box-shadow] hover:ring-4 focus-visible:ring-4 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
+      :class="cn(
+        'bg-white border-primary ring-ring/50 block size-4 shrink-0 rounded-full border shadow-sm transition-[color,box-shadow] hover:ring-4 focus-visible:ring-4 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50',
+        props.thumbClass,
+      )"
     />
   </SliderRoot>
 </template>

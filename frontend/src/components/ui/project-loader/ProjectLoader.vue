@@ -17,6 +17,11 @@ defineSlots<{
 const { isPending, isError, data, error } = useQuery({
   queryKey: props.queryKey,
   queryFn: () => props.load(),
+  // load() replaces the project of the store (shown image back to the first one):
+  // the images do not change during a session, never load them again on their own
+  staleTime: Infinity,
+  refetchOnWindowFocus: false,
+  refetchOnReconnect: false,
 })
 </script>
 

@@ -31,6 +31,11 @@ export function randomColorRGB(): [number, number, number] {
   return [Math.floor(Math.random() * 256), Math.floor(Math.random() * 256), Math.floor(Math.random() * 256)]
 }
 
+// short random base-36 id (landmarks)
+export function randomID(): string {
+  return (Math.random() + 1).toString(36).substring(7)
+}
+
 export enum Scale {
   px = 1,
   m = 1000,
@@ -59,8 +64,8 @@ export const SPACE_TARGET = 0.2
 export const ROUNDING = 2
 
 // length in image units -> length shown in `scale`, corrected by the calibration factor
-export function toScale(length: number, adjustFactor: number, scale: ScaleUnit): number {
-  return length * adjustFactor / Scale[scale]
+export function toScale(length: number, adjustFactor: number): number {
+  return length * adjustFactor
 }
 
 // calibration factor so that `length` is shown as `target` in `scale`

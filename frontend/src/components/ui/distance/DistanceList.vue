@@ -6,7 +6,7 @@ import { PhCircle } from "@phosphor-icons/vue"
 import { Button } from "../button"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "../select"
 import DistanceIteration from "./DistanceIteration.vue"
-import type { ListDistance, Measure } from "./types"
+import type { ListDistance } from "./types"
 
 const distances = defineModel<D[]>({ required: true })
 // index of the selected distance, -1: the next landmark creates a new distance
@@ -15,7 +15,6 @@ const scale = defineModel<ScaleUnit>('scale', { required: true })
 
 withDefaults(defineProps<{
   adjustFactor?: number
-  measure?: Measure<D>
   // units of the scale select
   units?: ScaleUnit[]
 }>(), {
@@ -78,13 +77,13 @@ function deleteDistance(index: number) {
       <Button variant="secondary" @click="select(-1)">New..</Button>
     </div>
     <DistanceIteration v-if="selectedDistance" v-model:scale="scale" :distance="selectedDistance"
-      :index="selectedIndex" :selected="true" :adjust-factor="adjustFactor" :measure="measure" :units="units"
+      :index="selectedIndex" :selected="true" :adjust-factor="adjustFactor" :units="units"
       @delete="deleteDistance">
       <template v-if="$slots.info" #info="slotProps"><slot name="info" v-bind="slotProps" /></template>
       <template v-if="$slots['landmark-info']" #landmark-info="slotProps"><slot name="landmark-info" v-bind="slotProps" /></template>
     </DistanceIteration>
     <DistanceIteration v-for="{ distance, index } in others" :key="index" v-model:scale="scale" :distance="distance"
-      :index="index" :selected="false" :adjust-factor="adjustFactor" :measure="measure" :units="units" @delete="deleteDistance"
+      :index="index" :selected="false" :adjust-factor="adjustFactor" :units="units" @delete="deleteDistance"
       @select="select">
       <template v-if="$slots.info" #info="slotProps"><slot name="info" v-bind="slotProps" /></template>
     </DistanceIteration>

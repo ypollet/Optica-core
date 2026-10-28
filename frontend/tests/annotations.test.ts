@@ -90,7 +90,7 @@ describe("Project annotations", () => {
   it("lets an app use its own Annotations", () => {
     const a = new TaggedAcquisition({ id: "a", images: [image("i0")], size, thumbnails: false })
     expect(a.annotations.tagged).toBe(true)
-    a.annotations.restore({ distances: [{ label: "d", color: "#00ff00", landmarks: [] }] })
+    a.annotations.restore({ distances: [{ label: "d", color: "#00ff00", landmarks: [], value: 0 }] })
     expect(a.annotations.distances[0]).toBeInstanceOf(Distance)
   })
 

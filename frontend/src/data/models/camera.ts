@@ -15,6 +15,11 @@ export type Camera = {
     zoomRect: ZoomRect
 }
 
+// The ImageViewer showing this camera fits the whole image on its next update
+export function fitCamera(camera: Camera) {
+    camera.zoom = 0
+}
+
 export function createCamera(): Camera {
     return {
         zoom: 0,

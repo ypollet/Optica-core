@@ -3,14 +3,13 @@ import { computed, ref, useTemplateRef } from "vue"
 import { round } from "mathjs"
 import draggable from "vuedraggable"
 import { PhEraser, PhEye, PhEyeSlash, PhX } from "@phosphor-icons/vue"
-import { ROUNDING, toScale, type ScaleUnit } from "../../../lib/utils"
+import { ROUNDING, Scale, toScale, type ScaleUnit } from "../../../lib/utils"
 import { Button } from "../button"
 import { Input } from "../input"
 import { Label } from "../label"
 import { LandmarkIteration } from "../landmark"
 import { SelectScale } from "../select-scale"
-import { defaultMeasure } from "./measure"
-import type { ListDistance, Measure } from "./types"
+import type { ListDistance } from "./types"
 
 const scale = defineModel<ScaleUnit>('scale', { required: true })
 
@@ -20,7 +19,6 @@ const props = withDefaults(defineProps<{
   // the selected distance shows its landmarks and its length
   selected?: boolean
   adjustFactor?: number
-  measure?: Measure<D>
   // units of the scale select
   units?: ScaleUnit[]
 }>(), {
@@ -46,8 +44,8 @@ const input = useTemplateRef('input')
 const scrollSnapType = ref<boolean>(true)
 
 const length = computed(() => {
-  const value = (props.measure ?? defaultMeasure)(props.distance, scale.value)
-  return value == undefined ? 0 : round(toScale(value, props.adjustFactor, scale.value), ROUNDING)
+  const value = props.distance.length(scale.value)
+  return value == undefined ? 0 : round(toScale(value, props.adjustFactor) / Scale[scale.value], ROUNDING)
 })
 
 function changeColor(event: Event) {

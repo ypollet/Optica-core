@@ -1,12 +1,12 @@
 import Color from "color"
 import { Landmark, type LandmarkObject } from "./landmark"
 import { distanceVector, type Coordinates, type Position } from "./coordinates"
-import { computeDistance, randomColorRGB } from "../../lib/utils"
+import { computeDistance, randomColorRGB, type ScaleUnit } from "../../lib/utils"
 
 export type DistanceObject = {
     label: string
     landmarks: Array<LandmarkObject>
-    color: string
+    color: string,
 }
 
 export class Distance {
@@ -50,9 +50,11 @@ export class Distance {
         return distance
     }
 
-    get length() : number | undefined {
-        const distance = this.distance
-        return distance === undefined ? undefined : computeDistance(distance)
+    // length in image units: pixel length for the "px" scale, physical length otherwise.
+    // undefined while it can't be measured
+    length(scale?: ScaleUnit) : number | undefined {
+        const intervals = scale == "px" ? this.distancePx : this.distance
+        return intervals === undefined ? undefined : computeDistance(intervals)
     }
 
     in(landmark : Landmark | string) : boolean{
@@ -80,6 +82,7 @@ export class Distance {
         this.color = Color.rgb(color[0], color[1], color[2])
     }
 
+    // the value (shown length) needs the calibration: Annotations.toJSON adds it
     toJSON() : DistanceObject {
         return { label: this.label, color: this.color.hex(), landmarks : this.landmarks.map((x) => x.toJSON())}
     }

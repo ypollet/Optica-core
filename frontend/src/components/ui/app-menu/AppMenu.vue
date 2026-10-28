@@ -143,7 +143,7 @@ function onSubmit(event: Event) {
       <DialogContent class="flex h-[85vh] w-[50vw] max-w-none sm:max-w-none flex-col overflow-hidden">
         <DialogHeader class="shrink-0">
           <DialogTitle>Credits</DialogTitle>
-          <DialogDescription>Thank to everyone that contributed to this project</DialogDescription>
+          <DialogDescription>Thanks to everyone that contributed to this project</DialogDescription>
         </DialogHeader>
         <div class="min-h-0 h-full w-full flex-1 overflow-y-auto overflow-x-hidden">
           <slot name="credits">

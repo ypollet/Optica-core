@@ -219,9 +219,6 @@ Same rule as the viewers: no store inside, the app binds its state with `v-model
   </template>
 </AnnotationTabs>
 
-<DistanceMeasures v-model="landmarksStore.distances" v-model:scale="landmarksStore.scale"
-  v-model:adjust-factor="landmarksStore.adjustFactor" />
-
 <AppMenu v-model:reverse="settingsStore.isLeft" app-name="Polaroptica" @import="importJSON" @export="exportAnnotations">
   <template #help-guide><HelpGuide /></template>
 </AppMenu>
@@ -232,16 +229,16 @@ Same rule as the viewers: no store inside, the app binds its state with `v-model
 | Component | Replaces | Variable parts |
 | --- | --- | --- |
 | `LandmarkList` / `LandmarkIteration` | `landmark/*` | `#info` (angle, image label, 3D pose), `#actions` (sphaer reset), `color-picker`, `visibility-toggle`, `highlighted`, `@activate` (row double click), `@remove` |
-| `DistanceList` / `DistanceIteration` | `distance/DistanceList`, `DistanceIteration` | `#info` (polar angle), `#landmark-info`, `measure` |
-| `DistanceMeasures` | `DistanceComputed` (stack, spectral), sphaer `DistanceList` | `measure`, `title` (empty: no header), `rounding` |
+| `DistanceList` / `DistanceIteration` | `distance/DistanceList`, `DistanceIteration` | `#info` (polar angle), `#landmark-info` |
 | `SelectScale` | `select-scale` | `v-model` unit |
+| `ToggleImage` | image toggle of the depth and stack `Sidebar` | `v-model` value of the shown image, `items` (`{ value, label }[]`); clicking the active button keeps it |
 | `AnnotationTabs` | tab block of every `Sidebar` | `tabs`, one slot per tab |
 | `AppMenu` | `Menu.vue` | `@import(text)`, `@export('csv' \| 'json')`, `#help-guide`, `#menus`, `credits` (content of Help › Credits, `{ developers, projects, institutions }`, kept by each viewer in `src/config/credits.ts`; no item without it; the shared logos are in `@optica/core/assets/images/credits/`), `importable`/`exportable` (spectral: false) |
 | `ProjectLoader` | `CameraViewer` loaders | `load`, `queryKey` (needs `VueQueryPlugin`) |
 
-`units` (on `SelectScale`, `DistanceList`, `DistanceIteration`, `DistanceMeasures`) restricts the units offered, depth leaves out `px`.
+`units` (on `SelectScale`, `DistanceList`, `DistanceIteration`) restricts the units offered, depth leaves out `px`.
 
-`measure(distance, scale)` returns a length in image units; the default reads the core `Distance` (`distance`, or `distancePx` for the `px` scale). Sphaer passes `(d) => d.distance` since its distances are numbers. Shown lengths are `toScale(length, adjustFactor, scale)`; typing a known length in `DistanceMeasures` sets `adjustFactor`.
+`distance.length(scale)` returns a length in image units (the core `Distance` reads `distance`, or `distancePx` for the `px` scale). Shown lengths are `toScale(length, adjustFactor) / Scale[scale]`; `Annotations.scaled(length)` gives the same, rounded, in the scale of the annotations, and `Annotations.calibrate(distance, target)` sets `adjustFactor` from a known length.
 
 Export helpers (`lib/export.ts`): `downloadCSV`, `downloadJSON`, `exportFilename("polar", objectPath, "json")`, with the `Project` annotation methods above. They replace `file-saver`.
 
@@ -250,7 +247,7 @@ Kept per app: the logos (each app has its own artwork), the sidebar layouts arou
 ## What is in the core
 
 - **Viewers**: `image-viewer` (+ `drawing.ts` helpers: `drawDot`, `drawTarget`, `pointInsideCircle`), `thumbnail-viewer`.
-- **Annotation UI**: `landmark`, `distance` (list, iteration, measures), `select-scale`, `annotation-tabs`, `app-menu`, `project-loader`.
+- **Annotation UI**: `landmark`, `distance` (list, iteration), `select-scale`, `annotation-tabs`, `app-menu`, `project-loader`.
 - **UI** (`frontend/src/components/ui`): button, card, carousel*, command, context-menu, credits, dialog, form*, input, input-group, label, menubar, scroll-area, select, separator, sheet, slider, switch, tabs, textarea, toggle, toggle-group — taken from polar (fully on reka-ui + Tailwind v4), card/carousel/credits from depth, form from sphaer. *optional peer deps (`embla-carousel-vue`, `vee-validate`; `@tanstack/vue-query` for `ProjectLoader`).
 - **Assets**: `base.css`, `main.css`, `index.css` (theme), DejaVuSans font, target/dot icons, partner logos.
 - **Lib**: `cn`, angle conversions, `computeDistance`, `Scale`, viewer constants.

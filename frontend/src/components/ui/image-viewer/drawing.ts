@@ -1,4 +1,5 @@
 import type { Coordinates } from "../../../data/models/coordinates"
+import type { Landmark } from "../../../data/models/landmark"
 import { degreesToRad, SPACE_TARGET } from "../../../lib/utils"
 
 export function posCircle(center: Coordinates, angle: number, radius: number): Coordinates {
