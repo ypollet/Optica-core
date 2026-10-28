@@ -1,5 +1,5 @@
 {
-  "name": "@optica/core",
+  "name": "optica-core",
   "version": "0.1.0",
   "description": "Shared frontend core of the Optica viewers",
   "license": "GPL-3.0-or-later",
@@ -22,7 +22,6 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "color": "^4.2.3",
-    "embla-carousel-vue": "^8.6.0",
     "mathjs": "^15.2.0",
     "reka-ui": "^2.11.0",
     "tailwind-merge": "^2.6.1",
@@ -33,9 +32,6 @@
     "vuedraggable": "^4.1.0"
   },
   "peerDependenciesMeta": {
-    "embla-carousel-vue": {
-      "optional": true
-    },
     "vee-validate": {
       "optional": true
     },
@@ -53,7 +49,6 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "color": "^4.2.3",
-    "embla-carousel-vue": "^8.6.0",
     "mathjs": "^15.2.0",
     "reka-ui": "^2.11.0",
     "tailwind-merge": "^2.6.1",

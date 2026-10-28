@@ -4,7 +4,7 @@ Code shared by the five Optica viewers (`depth`, `polar`, `spectral`, `sphaer`, 
 
 ```
 core/
-├── frontend/   @optica/core   Vue/TS: shadcn UI (reka-ui), assets, models, data layer
+├── frontend/   optica-core   Vue/TS: shadcn UI (reka-ui), assets, models, data layer
 └── api/        optica_core    Flask app factory + common routes
 ```
 
@@ -69,19 +69,19 @@ Tests: `cd api && python -m venv .venv && .venv/bin/pip install -e '.[test]' && 
 Add the package to an app:
 
 ```json
-"dependencies": { "@optica/core": "file:../core/frontend" }
+"dependencies": { "optica-core": "^0.1.0" }
 ```
 
 ```ts
-import { Landmark, Distance, DataRepository, RepositoryFactory, ProviderFactory, OrthancProvider, cn } from "@optica/core"
-import { Button } from "@optica/core/ui/button"
-import "@optica/core/assets/index.css"   // Tailwind v4 theme, also scans the core components
+import { Landmark, Distance, DataRepository, RepositoryFactory, ProviderFactory, OrthancProvider, cn } from "optica-core"
+import { Button } from "optica-core/ui/button"
+import "optica-core/assets/index.css"   // Tailwind v4 theme, also scans the core components
 ```
 
 An app keeps only its own payload type and parsing:
 
 ```ts
-import { DataRepository, ProviderFactory, OrthancProvider, RepositoryFactory, type ImageName, type Size } from "@optica/core"
+import { DataRepository, ProviderFactory, OrthancProvider, RepositoryFactory, type ImageName, type Size } from "optica-core"
 
 export type RotationImage = ImageName & { angle: number, image: string, thumbnail?: string }
 export type ProjectData = { rotationImages: RotationImage[], size: Size, thumbnails: boolean }
@@ -170,8 +170,8 @@ Watch the annotations, not the whole project: a deep watcher on the project walk
 
 ```vue
 <script setup lang="ts">
-import { ImageViewer } from "@optica/core/ui/image-viewer"
-import { ThumbnailViewer } from "@optica/core/ui/thumbnail-viewer"
+import { ImageViewer } from "optica-core/ui/image-viewer"
+import { ThumbnailViewer } from "optica-core/ui/thumbnail-viewer"
 </script>
 
 <ImageViewer :image="selectedImage" :size="size" :camera="camera"
@@ -235,7 +235,7 @@ Same rule as the viewers: no store inside, the app binds its state with `v-model
 | `SelectScale` | `select-scale` | `v-model` unit |
 | `ToggleImage` | image toggle of the depth and stack `Sidebar` | `v-model` value of the shown image, `items` (`{ value, label }[]`); clicking the active button keeps it |
 | `AnnotationTabs` | tab block of every `Sidebar` | `tabs`, one slot per tab |
-| `AppMenu` | `Menu.vue` | `@import(text)`, `@export('csv' \| 'json')`, `#help-guide`, `#menus`, `credits` (content of Help › Credits, `{ developers, projects, institutions }`, kept by each viewer in `src/config/credits.ts`; no item without it; the shared logos are in `@optica/core/assets/images/credits/`), `importable`/`exportable` (spectral: false) |
+| `AppMenu` | `Menu.vue` | `@import(text)`, `@export('csv' \| 'json')`, `#help-guide`, `#menus`, `credits` (content of Help › Credits, `{ developers, projects, institutions }`, kept by each viewer in `src/config/credits.ts`; no item without it; the shared logos are in `optica-core/assets/images/credits/`), `importable`/`exportable` (spectral: false) |
 | `ProjectLoader` | `CameraViewer` loaders | `load`, `queryKey` (needs `VueQueryPlugin`) |
 
 `units` (on `SelectScale`, `DistanceList`, `DistanceIteration`) restricts the units offered, depth leaves out `px`.
@@ -250,7 +250,7 @@ Kept per app: the logos (each app has its own artwork), the sidebar layouts arou
 
 - **Viewers**: `image-viewer` (+ `drawing.ts` helpers: `drawDot`, `drawTarget`, `pointInsideCircle`), `thumbnail-viewer`.
 - **Annotation UI**: `landmark`, `distance` (list, iteration), `select-scale`, `annotation-tabs`, `app-menu`, `project-loader`.
-- **UI** (`frontend/src/components/ui`): button, card, carousel*, command, context-menu, credits, dialog, form*, input, input-group, label, menubar, scroll-area, select, separator, sheet, slider, switch, tabs, textarea, toggle, toggle-group — taken from polar (fully on reka-ui + Tailwind v4), card/carousel/credits from depth, form from sphaer. *optional peer deps (`embla-carousel-vue`, `vee-validate`; `@tanstack/vue-query` for `ProjectLoader`).
+- **UI** (`frontend/src/components/ui`): button, card, command, context-menu, credits, dialog, form*, input, input-group, label, menubar, scroll-area, select, separator, sheet, slider, switch, tabs, textarea, toggle, toggle-group — taken from polar (fully on reka-ui + Tailwind v4), card/credits from depth, form from sphaer. *optional peer deps (`vee-validate`; `@tanstack/vue-query` for `ProjectLoader`).
 - **Assets**: `base.css`, `main.css`, `index.css` (theme), DejaVuSans font, target/dot icons, partner logos.
 - **Lib**: `cn`, angle conversions, `computeDistance`, `Scale`, viewer constants.
 - **Models**: `Project`, `Acquisition`, `Annotations`, `Coordinates`, `Position`, `ImageName`, `ProjectImage`, `Size`, `Camera`, `Marker`, `Landmark`, `Distance`, `DequeMax2`.
