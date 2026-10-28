@@ -1,4 +1,4 @@
-import { ANNOTATIONS_CSV_HEADER, Annotations, type AnnotationsObject } from "./annotations"
+import { Annotations, type AnnotationsSet } from "./annotations"
 import { createCamera, type Camera } from "./camera"
 import type { ProjectImage, Size } from "./image"
 
@@ -14,8 +14,9 @@ export type AcquisitionObject<TImage extends ProjectImage = ProjectImage> = {
     thumbnails: boolean
 }
 
-// Images taken together, with the viewer state and the annotations of the acquisition
-export class Acquisition<TImage extends ProjectImage = ProjectImage> {
+// Images taken together, with the viewer state and the annotations of the acquisition.
+// TAnnotations: an app's own set when its landmarks are not the core ones (sphaer)
+export class Acquisition<TImage extends ProjectImage = ProjectImage, TAnnotations extends AnnotationsSet = Annotations> {
     id: string
     label: string
     images: TImage[]
@@ -24,7 +25,7 @@ export class Acquisition<TImage extends ProjectImage = ProjectImage> {
     thumbnails: boolean
     camera: Camera
     // shared by the images of the group and the standalone ones
-    annotations: Annotations
+    annotations: TAnnotations
     // position in images
     index: number
     // name of the shown standalone image, null when an image of the group is shown
@@ -44,9 +45,9 @@ export class Acquisition<TImage extends ProjectImage = ProjectImage> {
         this.standalone = (this.images.length == 0) ? (this.standaloneImages[0]?.name ?? null) : null
     }
 
-    // apps with their own Annotations subclass override it (and `declare` the annotations type)
-    protected createAnnotations(): Annotations {
-        return new Annotations()
+    // apps with their own annotations override it (and `declare` the annotations type, or pass TAnnotations)
+    protected createAnnotations(): TAnnotations {
+        return new Annotations() as AnnotationsSet as TAnnotations
     }
 
     get hasGroup(): boolean {
@@ -126,7 +127,7 @@ export class Acquisition<TImage extends ProjectImage = ProjectImage> {
 }
 
 // An object and its acquisitions
-export class Project<TImage extends ProjectImage = ProjectImage, TAcquisition extends Acquisition<TImage> = Acquisition<TImage>> {
+export class Project<TImage extends ProjectImage = ProjectImage, TAcquisition extends Acquisition<TImage, AnnotationsSet> = Acquisition<TImage>> {
     objectPath: string
     acquisitions: TAcquisition[]
     // position in acquisitions
@@ -168,14 +169,14 @@ export class Project<TImage extends ProjectImage = ProjectImage, TAcquisition ex
     }
 
     // annotations of every acquisition, by acquisition id (export and persistence)
-    annotationsToJSON(): Record<string, AnnotationsObject> {
-        return Object.fromEntries(this.acquisitions.map((acquisition) => [acquisition.id, acquisition.annotations.toJSON()]))
+    annotationsToJSON(): Record<string, ReturnType<TAcquisition["annotations"]["toJSON"]>> {
+        return Object.fromEntries(this.acquisitions.map((acquisition) => [acquisition.id, acquisition.annotations.toJSON()])) as Record<string, ReturnType<TAcquisition["annotations"]["toJSON"]>>
     }
 
     // Reads annotationsToJSON(), or the annotations of a single acquisition (exports made before
     // the acquisitions) which go to the selected one. replace: restore instead of adding.
-    importAnnotations(object: Record<string, Partial<AnnotationsObject>> | Partial<AnnotationsObject>, replace: boolean = false) {
-        const apply = (acquisition: TAcquisition | undefined, annotations: Partial<AnnotationsObject>) => {
+    importAnnotations(object: Record<string, object> | object, replace: boolean = false) {
+        const apply = (acquisition: TAcquisition | undefined, annotations: object) => {
             if (replace) {
                 acquisition?.annotations.restore(annotations)
             } else {
@@ -183,18 +184,18 @@ export class Project<TImage extends ProjectImage = ProjectImage, TAcquisition ex
             }
         }
         if ("landmarks" in object || "distances" in object) {
-            apply(this.acquisition, object as Partial<AnnotationsObject>)
+            apply(this.acquisition, object)
             return
         }
-        Object.entries(object as Record<string, Partial<AnnotationsObject>>).forEach(([id, annotations]) => {
+        Object.entries(object as Record<string, object>).forEach(([id, annotations]) => {
             apply(this.getAcquisition(id), annotations)
         })
     }
 
-    // one row per landmark of every acquisition, with a header
+    // one row per landmark of every acquisition, with a header (the one of the annotations of the first acquisition)
     annotationsToCSVRows(): string[][] {
         return [
-            ["Acquisition", ...ANNOTATIONS_CSV_HEADER],
+            ["Acquisition", ...(this.acquisitions[0]?.annotations.csvHeader() ?? new Annotations().csvHeader())],
             ...this.acquisitions.flatMap((acquisition) => acquisition.annotations.toCSVRows().map((row) => [acquisition.id, ...row])),
         ]
     }

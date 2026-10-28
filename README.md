@@ -20,7 +20,7 @@ Every backend serves these routes; the frontend data layer (`src/data/providers/
 | `GET /<id>/<image>/thumbnail`   | thumbnail file, `Dataset.thumbnail()`          |
 | `GET /<id>/<image>/position?x&y`| physical position, `Dataset.position()`        |
 
-App-specific routes stay in each app and are added on the app returned by `create_app` (see `depth-core/app.py`). On the frontend, `provider.imageUrl(objectPath, image, "profile")` gives the url of a route about one image for both providers (WEB: `<id>/<image>/profile`, Orthanc: `/<plugin>/<image>/profile`).
+App-specific routes stay in each app and are added on the app returned by `create_app` (see `depth-core/app.py`). On the frontend, `provider.imageUrl(objectPath, image, "profile")` gives the url of a route about one image for both providers (WEB: `<id>/<image>/profile`, Orthanc: `/<plugin>/<image>/profile`). The ids are encoded (`segment`), an app building its own routes on `url(route)` encodes them too.
 
 ### Backend usage
 
@@ -160,6 +160,8 @@ usePersistedAnnotations(() => store.project)   // in a component: kept in sessio
 
 The sidebar state is saved across reloads (`getSelection`/`setSelection`) but not exported. An app with more annotations or rules extends `Annotations` and its `Acquisition` returns it from `createAnnotations()` with `declare annotations: …` (polar: `PolarAnnotations`, depth: `DepthAnnotations` with its profiles).
 
+An app whose landmarks are not the core ones implements `AnnotationsSet` (`toJSON`, `merge`, `restore`, `getSelection`/`setSelection`, `csvHeader`, `toCSVRows`) and passes it as the second type of `Acquisition`: `Project` export/import/CSV and `usePersistedAnnotations` only go through that interface (sphaer: `SphaerAcquisition extends Acquisition<SphereImage, SphaerAnnotations>`, landmarks posed on several views).
+
 Watch the annotations, not the whole project: a deep watcher on the project walks through all its images.
 
 ## Viewers
@@ -200,7 +202,7 @@ How each app maps on it:
 - **stack**: as above, `:editable="imagesStore.image == 'stack'"`.
 - **polar**: `:can-drag="(l) => annotations.canMoveTo(l, angle)"`, `@select` switches the sidebar tab.
 - **depth** (see `depth-core/src/components/DepthViewer.vue`): profiles' ends go in `extraLandmarks` and are drawn with `draw` (line, triangle end, ticks, hover position); `@move` recomputes the profile when the landmark belongs to one; the profiles are watched to call the exposed `update()` (the hover of the chart is not a landmark change).
-- **sphaer**: wrap in `ContextMenu`/`ContextMenuTrigger` with `context-menu fit-on-image-change`, `:marker-position="(l) => l.getPoses().get(image.name) ?? image.reprojections.get(l.id)"`, `:marker-stroke="(l) => l.getPoses().has(image.name) ? 'black' : 'white'"`. Its CameraViewer becomes `<ThumbnailViewer @drag="(m) => { cameraStore.moveLongitude(m.x * 180); cameraStore.moveLatitude(m.y * 180) }" />`.
+- **sphaer**: wrap in `ContextMenu`/`ContextMenuTrigger` with `context-menu fit-on-image-change`, `:marker-position="(l) => l.getPoses().get(image.name) ?? image.reprojections.get(l.id)"`, `:marker-stroke="(l) => l.getPoses().has(image.name) ? 'black' : 'white'"`. Its CameraViewer becomes `<ImageOverview @drag="(m) => { acquisition.moveLongitude(m.x * 180); acquisition.moveLatitude(m.y * 180) }" />` (`ImageOverview` forwards the `drag` of its thumbnail).
 
 ## Sidebar and menu components
 

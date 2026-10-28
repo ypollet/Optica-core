@@ -1,14 +1,14 @@
 import { watch } from "vue"
-import type { AnnotationsObject, AnnotationsSelection } from "../data/models/annotations"
 import type { Project } from "../data/models/project"
 
 // What is stored: the annotations (same as an export) and the sidebar state, by acquisition id
 type SavedAnnotations = {
-    annotations: Record<string, AnnotationsObject>
-    selection: Record<string, AnnotationsSelection>
+    annotations: Record<string, object>
+    selection: Record<string, object>
 }
 
-// Keeps the annotations of the loaded project in `storage`, by object, across reloads.
+// Keeps the annotations of the loaded project in `storage`, by object, across reloads
+// (any AnnotationsSet: the core Annotations or an app's own).
 // The project itself is loaded again from the backend: only the annotations are saved.
 // Call it in a component setup, `project` returns the project of the store.
 export function usePersistedAnnotations(project: () => Project<any, any> | null | undefined, storage: Storage = sessionStorage) {

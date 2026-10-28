@@ -22,7 +22,24 @@ export type AnnotationsSelection = {
     selectedDistanceIndex: number
 }
 
-export const ANNOTATIONS_CSV_HEADER = ["Group", "Group Label", "Landmark Label", "Color", "Pose_X", "Pose_Y", "Image", "ImageLabel", "X", "Y", "Z"]
+// What a Project needs from the annotations of an acquisition (export, import, persistence):
+// the core Annotations, or an app's own set when its landmarks differ (sphaer: one pose per view)
+export interface AnnotationsSet {
+    // saved form, also what merge and restore read back
+    toJSON(): object
+    // adds saved annotations (import)
+    merge(object: any): void
+    // replaces these annotations by saved ones (persistence)
+    restore(object: any): void
+    // sidebar state, kept across reloads but not exported
+    getSelection(): object
+    setSelection(selection: any): void
+    // the header of toCSVRows
+    csvHeader(): string[]
+    toCSVRows(): string[][]
+}
+
+export const ANNOTATIONS_CSV_HEADER =["Group", "Group Label", "Landmark Label", "Color", "Pose_X", "Pose_Y", "Image", "ImageLabel", "X", "Y", "Z"]
 
 // one CSV row (ANNOTATIONS_CSV_HEADER), `group`: label of the distance or profile of the landmark
 export function landmarkCSVRow(type: string, group: string, landmark: Landmark): string[] {
@@ -34,7 +51,7 @@ export function landmarkCSVRow(type: string, group: string, landmark: Landmark):
 
 // Landmarks and distances of an acquisition: all its images (group and standalone) share
 // one coordinate space, so one calibration. Apps with more annotations or rules extend it.
-export class Annotations {
+export class Annotations implements AnnotationsSet {
     landmarks: Landmark[] = []
     distances: Distance[] = []
     // calibration of the coordinate space
@@ -168,9 +185,12 @@ export class Annotations {
         }
     }
 
+    csvHeader(): string[] {
+        return ANNOTATIONS_CSV_HEADER
+    }
+
     // one row per landmark, the ones of a distance carry its label (no header)
     toCSVRows(): string[][] {
-        console.log("toCSVRows", this.landmarks, this.distances)
         return [
             ...this.landmarks.map((landmark) => landmarkCSVRow("Landmark", "", landmark)),
             ...this.distances.flatMap((distance) => distance.landmarks.map((landmark) => landmarkCSVRow("Distance", distance.label, landmark))),

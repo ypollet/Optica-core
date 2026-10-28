@@ -1,6 +1,7 @@
 import axios, { type AxiosResponse } from "axios";
 import type { DataProvider } from "./providers";
 import type { Coordinates } from "../models/coordinates";
+import { segment } from "./routes";
 
 // Orthanc plugins serve the images by instance id under /<plugin>/
 export class OrthancProvider implements DataProvider {
@@ -18,11 +19,11 @@ export class OrthancProvider implements DataProvider {
 
     // the instance id is enough to find the image
     imageUrl(objectPath: string, imageName: string, action: string): string {
-        return this.url(imageName + "/" + action)
+        return this.url(segment(imageName) + "/" + action)
     }
 
     async getImages(objectPath: string): Promise<AxiosResponse> {
-        return axios.get(this.url(objectPath + "/images"))
+        return axios.get(this.url(segment(objectPath) + "/images"))
     }
 
     getFullImage(objectPath: string, imageName : string): string {

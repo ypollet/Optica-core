@@ -17,9 +17,11 @@ class Dataset:
     def __init__(self, data_folder: str):
         self.data_folder = data_folder
 
+    # folder of an object: a folder directly in the data folder ("..", "." or a path is refused)
     def directory(self, id: str) -> str:
-        directory = os.path.join(self.data_folder, id)
-        if not os.path.isdir(directory):
+        root = os.path.abspath(self.data_folder)
+        directory = os.path.normpath(os.path.join(root, id))
+        if os.path.dirname(directory) != root or not os.path.isdir(directory):
             abort(404)
         return directory
 

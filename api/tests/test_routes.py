@@ -59,6 +59,16 @@ def test_missing_object(data_folder):
     assert client(data_folder).get("/nope/images").status_code == 404
 
 
+def test_object_outside_data_folder(tmp_path):
+    data = tmp_path / "data"
+    (data / "A1").mkdir(parents=True)
+    (tmp_path / "secret.txt").write_text("secret")
+    c = client(data)
+    for id in ("%2E%2E", "..", "."):
+        assert c.get(f"/{id}/secret.txt/full-image").status_code == 404
+        assert c.get(f"/{id}/images").status_code == 404
+
+
 def test_full_image_and_thumbnail(data_folder):
     c = client(data_folder)
     assert c.get("/A1/img.png/full-image").data == b"full"

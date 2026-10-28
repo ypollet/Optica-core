@@ -4,6 +4,7 @@ import { PhArrowsOut } from "@phosphor-icons/vue"
 import { cn } from "../../../lib/utils"
 import { fitCamera, type Camera } from "../../../data/models/camera"
 import type { ProjectImage, Size } from "../../../data/models/image"
+import type { Coordinates } from "../../../data/models/coordinates"
 import { Button } from "../button"
 import { Label } from "../label"
 import { ThumbnailViewer } from "../thumbnail-viewer"
@@ -22,6 +23,11 @@ const props = defineProps<{
   thumbnailClass?: HTMLAttributes["class"]
 }>()
 
+const emit = defineEmits<{
+  // drag on the thumbnail, as a fraction of its size (sphaer turns it into a rotation)
+  drag: [movement: Coordinates]
+}>()
+
 const slots = defineSlots<{
   // shown left of the thumbnail, which then takes half of the width (polar: the circular slider)
   aside?(): any
@@ -36,10 +42,11 @@ const slots = defineSlots<{
           <slot name="aside" />
         </div>
         <ThumbnailViewer :class="cn(slots.aside ? 'w-1/2 shrink' : 'w-full', props.thumbnailClass)"
-          :src="image.thumbnail || image.image" :alt="image.label" :size="size" :zoom-rect="camera.zoomRect" />
+          :src="image.thumbnail || image.image" :alt="image.label" :size="size" :zoom-rect="camera.zoomRect"
+          @drag="(movement) => emit('drag', movement)" />
       </div>
       <div class="flex items-center gap-2">
-        <Label class="min-w-0 truncate" :title="image.label">{{ image.label }}</Label>
+        <Label class="block min-w-0 truncate leading-normal" :title="image.label">{{ image.label }}</Label>
         <Label v-if="counter" class="ml-auto flex-none tabular-nums text-muted-foreground">{{ counter }}</Label>
         <Button variant="ghost" size="icon-sm" class="flex-none" :class="{ 'ml-auto': !counter }" title="Fit to screen"
           aria-label="Fit to screen" @click="fitCamera(camera)">
