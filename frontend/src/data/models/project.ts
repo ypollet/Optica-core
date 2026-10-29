@@ -11,7 +11,6 @@ export type AcquisitionObject<TImage extends ProjectImage = ProjectImage> = {
     // images on their own: the stacked results, the depth maps...
     standaloneImages?: TImage[]
     size: Size
-    thumbnails: boolean
 }
 
 // Images taken together, with the viewer state and the annotations of the acquisition.
@@ -22,7 +21,6 @@ export class Acquisition<TImage extends ProjectImage = ProjectImage, TAnnotation
     images: TImage[]
     standaloneImages: TImage[]
     size: Size
-    thumbnails: boolean
     camera: Camera
     // shared by the images of the group and the standalone ones
     annotations: TAnnotations
@@ -37,7 +35,6 @@ export class Acquisition<TImage extends ProjectImage = ProjectImage, TAnnotation
         this.images = object.images
         this.standaloneImages = object.standaloneImages ?? []
         this.size = object.size
-        this.thumbnails = object.thumbnails
         this.camera = createCamera()
         this.annotations = this.createAnnotations()
         this.index = 0
@@ -121,7 +118,6 @@ export class Acquisition<TImage extends ProjectImage = ProjectImage, TAnnotation
             images: this.images,
             standaloneImages: this.standaloneImages,
             size: this.size,
-            thumbnails: this.thumbnails,
         }
     }
 }

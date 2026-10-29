@@ -1,7 +1,9 @@
 // Minimal image identity shared by every app (stack, rotation, spectral, ...)
 export type ImageName = {
     name: string,
-    label: string
+    label: string,
+    // sent by the backend when the thumbnail of this image exists
+    hasThumbnail?: boolean
 }
 
 // What an annotation keeps of its image: the name to find it back, the label and the

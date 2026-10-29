@@ -36,9 +36,23 @@ class Dataset:
     def full_image(self, id: str, image_id: str) -> tuple[str, str]:
         return self.directory(id), image_id
 
+    # folder of the thumbnails, named by "thumbnails" in the manifest, None when the object has none
+    def thumbnails_folder(self, id: str, manifest: dict) -> str | None:
+        folder = manifest.get("thumbnails")
+        return os.path.join(self.directory(id), folder) if folder else None
+
+    # true when the thumbnail `filename` is in `folder` (None: the object has no thumbnails),
+    # apps send it as `hasThumbnail` with each image
+    @staticmethod
+    def has_thumbnail(folder: str | None, filename: str) -> bool:
+        return folder is not None and os.path.isfile(os.path.join(folder, filename))
+
     # (directory, filename) of the thumbnail
     def thumbnail(self, id: str, image_id: str) -> tuple[str, str]:
-        return os.path.join(self.directory(id), "thumbnails"), image_id
+        folder = self.thumbnails_folder(id, self.load(id))
+        if folder is None:
+            abort(404)
+        return folder, image_id
 
     # payload of /<id>/images
     def images(self, id: str) -> dict:

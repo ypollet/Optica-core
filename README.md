@@ -30,6 +30,8 @@ pip install -e ../core/api
 
 ```python
 # polar/app.py
+import os
+
 from optica_core import Dataset, create_app
 
 
@@ -40,11 +42,12 @@ class RotationDataset(Dataset):
         rotation_file = self.load(id)
         return {
             "rotationImages": [
-                {"name": name, "label": name, "angle": round(image["angle"], 2)}
+                {"name": name, "label": name, "angle": round(image["angle"], 2),
+                 # only when the thumbnail file exists
+                 "hasThumbnail": os.path.isfile(os.path.join(*self.thumbnail(id, name)))}
                 for name, image in rotation_file["rotation"].items()
             ],
             "size": {"height": rotation_file["height"], "width": rotation_file["width"]},
-            "thumbnails": len(rotation_file["thumbnails"]) != 0,
         }
 
     def position(self, id, image_id, x, y):
@@ -84,12 +87,12 @@ An app keeps only its own payload type and parsing:
 import { DataRepository, ProviderFactory, OrthancProvider, RepositoryFactory, type ImageName, type Size } from "optica-core"
 
 export type RotationImage = ImageName & { angle: number, image: string, thumbnail?: string }
-export type ProjectData = { rotationImages: RotationImage[], size: Size, thumbnails: boolean }
+export type ProjectData = { rotationImages: RotationImage[], size: Size }
 
 export class RotationRepository extends DataRepository<ProjectData, RotationImage> {
     async getImages(objectPath: string) {
         const data = (await this.provider.getImages(objectPath)).data as ProjectData
-        data.rotationImages = this.resolveUrls(objectPath, data.rotationImages, data.thumbnails)
+        data.rotationImages = this.resolveUrls(objectPath, data.rotationImages)
         return data
     }
 }
@@ -128,19 +131,26 @@ App images extend `ProjectImage` (`RotationImage = ProjectImage & { angle: numbe
 The backend returns the standard payload with the helpers of `optica_core`:
 
 ```python
+import os
+
 from optica_core import acquisition, image, project
 
 def images(self, id):
     stack_file = self.load(id)
+
+    # the url of a thumbnail is only given to the images whose thumbnail file exists
+    def has_thumbnail(name):
+        return os.path.isfile(os.path.join(*self.thumbnail(id, name)))
+
     return project(acquisition(
         "stack", size={"width": stack_file["width"], "height": stack_file["height"]},
-        images=[image(name) for name in stack_file["stack"]],
-        standalone_images=[image(name, label) for label, name in stack_file["Stacked_images"].items()],
-        thumbnails=bool(stack_file.get("thumbnails")),
+        images=[image(name, hasThumbnail=has_thumbnail(name)) for name in stack_file["stack"]],
+        standalone_images=[image(name, label, hasThumbnail=has_thumbnail(name))
+                           for label, name in stack_file["Stacked_images"].items()],
     ))
 ```
 
-`ProjectRepository` reads it as is. Until a backend is migrated, pass a parser for its old payload: `new ProjectRepository(provider, (data) => [{ id: "rotation", images: data.rotationImages, size: data.size, thumbnails: data.thumbnails }])` (see `frontend/tests/project.test.ts` for spectral and depth).
+`ProjectRepository` reads it as is. Until a backend is migrated, pass a parser for its old payload: `new ProjectRepository(provider, (data) => [{ id: "rotation", images: data.rotationImages, size: data.size }])` (see `frontend/tests/project.test.ts` for spectral and depth).
 
 ### Annotations
 

@@ -2,7 +2,8 @@
 
 
 def image(name: str, label: str | None = None, size: dict | None = None, **extra) -> dict:
-    """One image, `extra` holds the app fields (angle, wavelength, coordinates...)."""
+    """One image, `extra` holds the app fields (angle, wavelength, coordinates...)
+    and `hasThumbnail`, true when its thumbnail file exists."""
     data = {"name": name, "label": label if label is not None else name, **extra}
     if size is not None:
         data["size"] = size
@@ -14,7 +15,6 @@ def acquisition(
     size: dict,
     images: list[dict] = (),
     standalone_images: list[dict] = (),
-    thumbnails: bool = False,
     label: str | None = None,
 ) -> dict:
     """Images taken together (`images`, in order) and images on their own (`standalone_images`)."""
@@ -24,7 +24,6 @@ def acquisition(
         "images": list(images),
         "standaloneImages": list(standalone_images),
         "size": size,
-        "thumbnails": thumbnails,
     }
 
 

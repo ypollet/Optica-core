@@ -28,11 +28,12 @@ export abstract class DataRepository<TData> implements Repository<TData> {
         return this.provider.getThumbnail(objectPath, imageName)
     }
 
-    // Fill the image and thumbnail urls of images sent by /images
-    protected resolveUrls<T extends ImageName>(objectPath: string, images: T[], thumbnails: boolean): (T & ProjectImage)[] {
+    // Fill the image and thumbnail urls of images sent by /images,
+    // the thumbnail url only for the images the backend marks with `hasThumbnail`
+    protected resolveUrls<T extends ImageName>(objectPath: string, images: T[]): (T & ProjectImage)[] {
         return images.map((image) => Object.assign(image, {
             image: this.getFullImage(objectPath, image.name),
-            thumbnail: thumbnails ? this.getThumbnail(objectPath, image.name) : undefined,
+            thumbnail: image.hasThumbnail ? this.getThumbnail(objectPath, image.name) : undefined,
         }))
     }
 }

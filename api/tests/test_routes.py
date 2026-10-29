@@ -30,7 +30,7 @@ def data_folder(tmp_path):
     (obj / "thumbnails").mkdir(parents=True)
     (obj / "img.png").write_bytes(b"full")
     (obj / "thumbnails" / "img.png").write_bytes(b"thumb")
-    (obj / "stack.json").write_text(json.dumps({"stack": {"img.png": {"PixelRatio": [2, 3]}}}))
+    (obj / "stack.json").write_text(json.dumps({"stack": {"img.png": {"PixelRatio": [2, 3]}}, "thumbnails": "thumbnails"}))
     templates = tmp_path / "dist"
     templates.mkdir()
     (templates / "index.html").write_text("{{ site.logo }} {{ site.version }} {{ owner.name }}")
@@ -75,6 +75,20 @@ def test_full_image_and_thumbnail(data_folder):
     assert c.get("/A1/img.png/thumbnail").data == b"thumb"
 
 
+def test_thumbnails_folder_from_the_manifest(data_folder):
+    dataset = StackDataset(str(data_folder))
+    folder = dataset.thumbnails_folder("A1", dataset.load("A1"))
+    assert folder == str(data_folder / "A1" / "thumbnails")
+    assert dataset.has_thumbnail(folder, "img.png")
+    assert not dataset.has_thumbnail(folder, "missing.png")
+    # no "thumbnails" in the manifest, or an empty one: no folder, no thumbnail route
+    for manifest in ({}, {"thumbnails": ""}):
+        assert dataset.thumbnails_folder("A1", manifest) is None
+        assert not dataset.has_thumbnail(None, "img.png")
+    (data_folder / "A1" / "stack.json").write_text(json.dumps({"stack": {"img.png": {"PixelRatio": [2, 3]}}}))
+    assert client(data_folder).get("/A1/img.png/thumbnail").status_code == 404
+
+
 def test_position(data_folder):
     res = client(data_folder).get("/A1/img.png/position?x=1.5&y=2")
     assert res.json == {"x": 3.0, "y": 6.0}
@@ -108,15 +122,14 @@ def test_project_payload(data_folder):
             return project(acquisition(
                 "stack",
                 size={"width": 2000, "height": 1000},
-                images=[image(n, angle=0) for n in stack_file["stack"]],
+                images=[image(n, angle=0, hasThumbnail=True) for n in stack_file["stack"]],
                 standalone_images=[image("result.png", "Result", size={"width": 10, "height": 5})],
-                thumbnails=True,
             ))
 
     res = client(data_folder, ProjectDataset).get("/A1/images")
     assert res.json == {"acquisitions": [{
         "id": "stack", "label": "stack",
-        "images": [{"name": "img.png", "label": "img.png", "angle": 0}],
+        "images": [{"name": "img.png", "label": "img.png", "angle": 0, "hasThumbnail": True}],
         "standaloneImages": [{"name": "result.png", "label": "Result", "size": {"width": 10, "height": 5}}],
-        "size": {"width": 2000, "height": 1000}, "thumbnails": True,
+        "size": {"width": 2000, "height": 1000},
     }]}

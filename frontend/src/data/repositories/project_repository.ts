@@ -34,8 +34,8 @@ export class ProjectRepository<TImage extends ProjectImage = ProjectImage, TAcqu
     async getImages(objectPath: string): Promise<Project<TImage, TAcquisition>> {
         const res = await this.provider.getImages(objectPath)
         const acquisitions = this.parse(res.data).map((object) => {
-            object.images = this.resolveUrls(objectPath, object.images, object.thumbnails)
-            object.standaloneImages = this.resolveUrls(objectPath, object.standaloneImages ?? [], object.thumbnails)
+            object.images = this.resolveUrls(objectPath, object.images)
+            object.standaloneImages = this.resolveUrls(objectPath, object.standaloneImages ?? [])
             return this.createAcquisition(object)
         })
         return new Project<TImage, TAcquisition>(objectPath, acquisitions)

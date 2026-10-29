@@ -9,7 +9,7 @@ import {
 const size = { width: 100, height: 100 }
 const image = (name: string): ProjectImage => ({ name, label: name, image: "" })
 const landmark = (id: string, img = image("i0")) => new Landmark(id, id, { marker: { x: 1, y: 2 }, image: img }, { x: 10, y: 20 }, Color("#ff0000"))
-const acquisition = (id: string, names: string[] = ["i0"]) => new Acquisition({ id, images: names.map(image), size, thumbnails: false })
+const acquisition = (id: string, names: string[] = ["i0"]) => new Acquisition({ id, images: names.map(image), size })
 
 describe("Annotations", () => {
   it("creates a selected distance and returns the reactive copy through a store", () => {
@@ -88,7 +88,7 @@ class TaggedAcquisition extends Acquisition<ProjectImage> {
 
 describe("Project annotations", () => {
   it("lets an app use its own Annotations", () => {
-    const a = new TaggedAcquisition({ id: "a", images: [image("i0")], size, thumbnails: false })
+    const a = new TaggedAcquisition({ id: "a", images: [image("i0")], size })
     expect(a.annotations.tagged).toBe(true)
     a.annotations.restore({ distances: [{ label: "d", color: "#00ff00", landmarks: [], value: 0 }] })
     expect(a.annotations.distances[0]).toBeInstanceOf(Distance)
