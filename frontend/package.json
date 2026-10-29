@@ -16,11 +16,18 @@
     ".": "./src/index.ts",
     "./ui/*": "./src/components/ui/*/index.ts",
     "./icons/*": "./src/components/icons/*.vue",
-    "./assets/*": "./src/assets/*"
+    "./assets/*": "./src/assets/*",
+    "./vite": {
+      "types": "./vite/index.d.ts",
+      "default": "./vite/index.js"
+    }
   },
   "scripts": {
     "type-check": "vue-tsc --noEmit -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "push": "npm version patch && git push",
+    "push-minor": "npm version minor && git push",
+    "push-major": "npm version major && git push"
   },
   "peerDependencies": {
     "@phosphor-icons/vue": "^2.2.1",
