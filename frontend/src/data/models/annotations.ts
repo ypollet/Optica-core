@@ -46,7 +46,7 @@ export const POSITION_CSV_HEADER = ["X", "Y", "Z"]
 
 export const DEFAULT_CSV_HEADER = [...LANDMARK_CSV_HEADER, ...POSE_CSV_HEADER, ...POSITION_CSV_HEADER]
 
-// one CSV row (ANNOTATIONS_CSV_HEADER), `group`: label of the distance or profile of the landmark
+// one CSV row (DEFAULT_CSV_HEADER), `group`: label of the distance or profile of the landmark
 export function landmarkCSVRow(type: string, group: string, landmark: Landmark): string[] {
     const { marker, image } = landmark.pose
     const position = landmark.position
