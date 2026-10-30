@@ -1,29 +1,26 @@
 <script setup lang="ts" generic="D extends ListDistance">
 import { computed, ref, useTemplateRef } from "vue"
-import { round } from "mathjs"
 import draggable from "vuedraggable"
 import { PhEraser, PhEye, PhEyeSlash, PhX } from "@phosphor-icons/vue"
-import { ROUNDING, Scale, toScale, type ScaleUnit } from "../../../lib/utils"
+import type { ScaleUnit } from "../../../lib/utils"
 import { Button } from "../button"
 import { Input } from "../input"
 import { Label } from "../label"
 import { LandmarkIteration } from "../landmark"
 import { SelectScale } from "../select-scale"
-import type { ListDistance } from "./types"
-
-const scale = defineModel<ScaleUnit>('scale', { required: true })
+import type { ListAnnotations, ListDistance } from "./types"
 
 const props = withDefaults(defineProps<{
   distance: D
+  // its scale select changes the scale of the annotations
+  annotations: ListAnnotations<D>
   index: number
   // the selected distance shows its landmarks and its length
   selected?: boolean
-  adjustFactor?: number
   // units of the scale select
   units?: ScaleUnit[]
 }>(), {
   selected: true,
-  adjustFactor: 1,
 })
 
 const emit = defineEmits<{
@@ -43,10 +40,7 @@ defineSlots<{
 const input = useTemplateRef('input')
 const scrollSnapType = ref<boolean>(true)
 
-const length = computed(() => {
-  const value = props.distance.length(scale.value)
-  return value == undefined ? 0 : round(toScale(value, props.adjustFactor) / Scale[scale.value], ROUNDING)
-})
+const length = computed(() => props.annotations.scaled(props.distance))
 
 function changeColor(event: Event) {
   const target = event.currentTarget as HTMLInputElement | null
@@ -152,9 +146,9 @@ function showInput(event: MouseEvent) {
     <div class="flex row justify-between">
       <div class="flex row space-x-1">
         <Label class="flex whitespace-nowrap w-auto items-center">Distance :</Label>
-        <Label class="flex whitespace-nowrap w-auto items-center">{{ length }} {{ scale }}</Label>
+        <Label class="flex whitespace-nowrap w-auto items-center">{{ length }} {{ annotations.scale }}</Label>
       </div>
-      <SelectScale v-if="selected" v-model="scale" :units="units" />
+      <SelectScale v-if="selected" v-model="annotations.scale" :units="units" />
       <div v-else />
       
     </div>

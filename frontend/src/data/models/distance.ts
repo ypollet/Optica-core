@@ -1,12 +1,20 @@
 import Color from "color"
 import { Landmark, type LandmarkObject } from "./landmark"
-import { distanceVector, type Coordinates, type Position } from "./coordinates"
+import { distanceVector, type Position } from "./coordinates"
 import { computeDistance, randomColorRGB, type ScaleUnit } from "../../lib/utils"
 
 export type DistanceObject = {
     label: string
     landmarks: Array<LandmarkObject>
     color: string,
+}
+
+// sum of the segments between consecutive landmarks, `point`: where a landmark is. undefined under two landmarks
+function sumOfSegments(landmarks: Landmark[], point: (landmark: Landmark) => Position) : number | undefined {
+    if(landmarks.length < 2 ){
+        return undefined
+    }
+    return computeDistance(landmarks.slice(1).map((landmark, i) => distanceVector(point(landmarks[i]!), point(landmark))))
 }
 
 export class Distance {
@@ -26,35 +34,19 @@ export class Distance {
         this.color = color || Color.rgb(randomColorRGB())
     }
 
-    // Physical vector between each consecutive pair of landmarks
-    get distance() : Position[] | undefined{
-        if(this.landmarks.length < 2 ){
-            return undefined
-        }
-        let distance : Position[] = new Array()
-        for(let i = 1; i < this.landmarks.length; i++){
-            distance.push(distanceVector(this.landmarks[i-1].position, this.landmarks[i].position))
-        }
-        return distance
+    // physical length: sum of the segments between consecutive landmarks, undefined under two landmarks
+    get distance() : number | undefined {
+        return sumOfSegments(this.landmarks, (landmark) => landmark.position)
     }
 
-    // Pixel vector between each consecutive pair of landmarks
-    get distancePx() : Coordinates[] | undefined{
-        if(this.landmarks.length < 2 ){
-            return undefined
-        }
-        let distance : Coordinates[] = new Array()
-        for(let i = 1; i < this.landmarks.length; i++){
-            distance.push(distanceVector(this.landmarks[i-1].pose.marker, this.landmarks[i].pose.marker))
-        }
-        return distance
+    // pixel length: sum of the segments between consecutive markers, undefined under two landmarks
+    get distancePx() : number | undefined {
+        return sumOfSegments(this.landmarks, (landmark) => landmark.pose.marker)
     }
 
-    // length in image units: pixel length for the "px" scale, physical length otherwise.
-    // undefined while it can't be measured
+    // length in image units: pixel length for the "px" scale, physical length otherwise
     length(scale?: ScaleUnit) : number | undefined {
-        const intervals = scale == "px" ? this.distancePx : this.distance
-        return intervals === undefined ? undefined : computeDistance(intervals)
+        return scale == "px" ? this.distancePx : this.distance
     }
 
     in(landmark : Landmark | string) : boolean{

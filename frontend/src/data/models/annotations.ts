@@ -5,7 +5,7 @@ import { Landmark, type LandmarkObject } from "./landmark"
 
 // Saved form of a distance of the annotations: with its length shown in the scale of the annotations (not read back)
 export type DistanceAnnotationObject = DistanceObject & {
-    value: number
+    distance: number
 }
 
 // Saved form of the annotations of an acquisition (scale_factor: key of the first polar exports)
@@ -91,9 +91,19 @@ export class Annotations implements AnnotationsSet {
         return this.distances[index]!
     }
 
-    // length in image units shown in the current scale, corrected by the calibration and rounded
-    scaled(length: number): number {
-        return round(toScale(length, this.adjustFactor) / Scale[this.scale], ROUNDING)
+    // length of the distance shown in the current scale, corrected by the calibration and rounded (0 while it can't be measured)
+    scaled(distance: Distance): number {
+        return this.toUnit(distance.length(this.scale))
+    }
+
+    // length in image units (pixels for the "px" scale) -> in the current scale, corrected by the calibration
+    protected inScale(length: number): number {
+        return toScale(length, this.adjustFactor) / Scale[this.scale]
+    }
+
+    // inScale rounded for display (0 while it can't be measured)
+    protected toUnit(length: number | undefined): number {
+        return length == undefined ? 0 : round(this.inScale(length), ROUNDING)
     }
 
     // typing a known length on a distance calibrates the coordinate space
@@ -129,7 +139,7 @@ export class Annotations implements AnnotationsSet {
             landmarks: this.landmarks.map((landmark) => landmark.toJSON()),
             distances: this.distances.map((distance) => ({
                 ...distance.toJSON(),
-                value: this.scaled(distance.length(this.scale) ?? 0),
+                distance: this.scaled(distance),
             })),
         }
     }
