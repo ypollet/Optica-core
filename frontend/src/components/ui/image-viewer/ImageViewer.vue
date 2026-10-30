@@ -80,6 +80,11 @@ const canvas = useTemplateRef('canvas')
 
 // image drawn on the canvas, the thumbnail first then the full image
 let baseImage: HTMLImageElement = new Image()
+// halved copies of baseImage (level i is 1/2^i of its size), drawn when zoomed out
+// so the noise is averaged instead of aliased
+let pyramid: CanvasImageSource[] = []
+// no more halving below this size, in pixels
+const PYRAMID_MIN_SIZE = 512
 // incremented on each image change so late loads of a previous image are ignored
 let loadToken = 0
 
@@ -97,7 +102,7 @@ function loadImage() {
     if (token != loadToken) {
       return
     }
-    baseImage = first
+    setBaseImage(first)
     if (props.camera.zoom <= 0 || props.fitOnImageChange) {
       screenFit()
     }
@@ -112,7 +117,7 @@ function loadImage() {
         full.alt = image.name
         full.onload = () => {
           if (token == loadToken) {
-            baseImage = full
+            setBaseImage(full)
             update()
           }
         }
@@ -121,6 +126,26 @@ function loadImage() {
     }
   }
   first.src = image.thumbnail || image.image
+}
+
+function setBaseImage(image: HTMLImageElement) {
+  baseImage = image
+  pyramid = [image]
+  let prev: CanvasImageSource = image
+  let width = image.naturalWidth
+  let height = image.naturalHeight
+  while (width > PYRAMID_MIN_SIZE && height > PYRAMID_MIN_SIZE) {
+    width = Math.ceil(width / 2)
+    height = Math.ceil(height / 2)
+    const level = document.createElement('canvas')
+    level.width = width
+    level.height = height
+    const ctx = level.getContext('2d')!
+    ctx.imageSmoothingQuality = 'high'
+    ctx.drawImage(prev, 0, 0, width, height)
+    pyramid.push(level)
+    prev = level
+  }
 }
 
 loadImage()
@@ -253,7 +278,13 @@ function drawImage(c: HTMLCanvasElement) {
     x: Math.max(0, (c.width - baseImage.naturalWidth * zoomX) / 2) / zoomX,
     y: Math.max(0, (c.height - baseImage.naturalHeight * zoomY) / 2) / zoomY
   }
-  ctx.drawImage(baseImage, 0, 0, baseImage.naturalWidth, baseImage.naturalHeight,
+  // the smallest level still at least as detailed as the screen, the last downscale stays under 2x
+  const level = Math.max(0, Math.min(pyramid.length - 1, Math.floor(Math.log2(1 / Math.max(zoomX, zoomY)))))
+  const source = pyramid[level]
+  const sourceWidth = level == 0 ? baseImage.naturalWidth : (source as HTMLCanvasElement).width
+  const sourceHeight = level == 0 ? baseImage.naturalHeight : (source as HTMLCanvasElement).height
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(source, 0, 0, sourceWidth, sourceHeight,
     shiftCanvas.x, shiftCanvas.y, baseImage.naturalWidth, baseImage.naturalHeight)
 
   const toCanvas = (pos: Coordinates): Coordinates => ({
