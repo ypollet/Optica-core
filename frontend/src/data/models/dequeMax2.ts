@@ -1,30 +1,68 @@
-export class DequeMax2{
-    deque : Array<string>
+// At most two items in order of addition, adding a third one drops the first
+// (sphaer: the two selected landmarks, depth: the ends of a profile).
+// Items are compared with their equals, which also finds them by id (landmarks)
+export class DequeMax2<T extends { equals(other: T | string): boolean }> {
+    items: T[] = []
 
-    constructor(){
-        this.deque= new Array()
+    constructor(items: T[] = []) {
+        items.forEach((item) => this.add(item))
     }
 
-    add(landmark : string){
-        if(this.selected(landmark) || landmark == null){
-            return;
+    get length(): number {
+        return this.items.length
+    }
+
+    get first(): T | undefined {
+        return this.items[0]
+    }
+
+    get last(): T | undefined {
+        return this.items[this.items.length - 1]
+    }
+
+    isEmpty(): boolean {
+        return this.items.length == 0
+    }
+
+    isFull(): boolean {
+        return this.items.length == 2
+    }
+
+    // an item already in is not added again
+    add(item: T) {
+        if (this.contains(item)) {
+            return
         }
-        if(this.deque.length == 2){
-            this.deque.shift()
+        if (this.isFull()) {
+            this.items.shift()
         }
-        this.deque.push(landmark)
-    }
-    
-    remove(landmark: string){
-        let index : number = this.deque.indexOf(landmark)
-        this.deque.splice(index, 1)
+        this.items.push(item)
     }
 
-    selected(landmark: string){
-        return this.deque.indexOf(landmark) >= 0
+    popFirst() {
+        this.items.shift()
     }
 
-    fullSelected(){
-        return this.deque.length == 2
+    popLast() {
+        this.items.pop()
+    }
+
+    permute() {
+        this.items.reverse()
+    }
+
+    contains(item: T | string | null | undefined): boolean {
+        if (item == null) {
+            return false
+        }
+        return this.items.some((other) => other.equals(item))
+    }
+
+    remove(item: T | string) {
+        this.items = this.items.filter((other) => !other.equals(item))
+    }
+
+    forEach(callback: (item: T) => void) {
+        this.items.forEach(callback)
     }
 }

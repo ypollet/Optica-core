@@ -21,15 +21,11 @@ export class Distance {
     label : string
     landmarks : Array<Landmark>
     color: Color
-    edit_label: boolean
-    edit_distance: boolean
     show : boolean
 
     constructor(label: string, landmarks : Array<Landmark> | null = null, color: Color | null = null){
         this.label = label
         this.landmarks = landmarks || new Array()
-        this.edit_label = false
-        this.edit_distance = false
         this.show = true
         this.color = color || Color.rgb(randomColorRGB())
     }

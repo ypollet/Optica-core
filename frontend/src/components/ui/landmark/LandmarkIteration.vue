@@ -1,10 +1,11 @@
 <script setup lang="ts" generic="L extends ListLandmark">
-import { nextTick, onBeforeUnmount, useTemplateRef, watch } from "vue"
+import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from "vue"
 import { PhEye, PhEyeSlash, PhX } from "@phosphor-icons/vue"
 import { Button } from "../button"
 import { Input } from "../input"
 import { Label } from "../label"
 import { Separator } from "../separator"
+import { interaction } from "../../../lib/interaction"
 import type { ListLandmark } from "./types"
 
 const props = withDefaults(defineProps<{
@@ -33,6 +34,10 @@ defineSlots<{
   actions?(props: { landmark: L }): any
 }>()
 
+// the label is being typed
+const editing = ref<boolean>(false)
+const dragged = computed(() => interaction.dragged == props.landmark.id)
+
 function changeColor(event: Event) {
   const target = event.currentTarget as HTMLInputElement | null
   if (target == null) {
@@ -42,19 +47,21 @@ function changeColor(event: Event) {
 }
 
 function changeLabel(payload: string | number) {
-  props.landmark.setLabel(payload.toString())
+  props.landmark.label = payload.toString()
 }
 
-// isClicked stays true from pointer down until release, even while dragging the row.
+// The landmark stays pressed from pointer down until release, even while dragging the row.
 // The release is listened on window: during a drag the pointer is no longer over this row.
 function release() {
-  props.landmark.isClicked = false
+  if (interaction.pressed == props.landmark.id) {
+    interaction.pressed = null
+  }
   window.removeEventListener('pointerup', release)
   window.removeEventListener('pointercancel', release)
 }
 
 function press() {
-  props.landmark.isClicked = true
+  interaction.pressed = props.landmark.id
   window.addEventListener('pointerup', release)
   window.addEventListener('pointercancel', release)
 }
@@ -62,9 +69,9 @@ function press() {
 onBeforeUnmount(release)
 
 // Scroll the row into view when its landmark is dragged in the image viewer.
-// immediate: the row is often mounted after isDragged is set (sidebar tab/selection switch).
+// immediate: the row is often mounted after the drag started (sidebar tab/selection switch).
 const row = useTemplateRef('row')
-watch(() => props.landmark.isDragged, (isDragged) => {
+watch(dragged, (isDragged) => {
   if (isDragged) {
     nextTick(() => row.value?.scrollIntoView({ block: 'nearest' }))
   }
@@ -73,7 +80,7 @@ watch(() => props.landmark.isDragged, (isDragged) => {
 
 <template>
   <div ref="row" class="scroll-align border flex grow p-2" @pointerdown="press"
-    :class="{ 'dark:bg-purple-800 bg-purple-400': landmark.isDragged || highlighted }">
+    :class="{ 'dark:bg-purple-800 bg-purple-400': dragged || highlighted }">
     <div class="h-12 flex grow flex-row justify-between items-center font-normal px-3 py-2">
       <div class="flex flex-row w-full items-center justify-start space-x-3 py-3 mr-3">
         <svg v-if="handle" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor"
@@ -85,11 +92,11 @@ watch(() => props.landmark.isDragged, (isDragged) => {
         <input v-if="colorPicker" type="color"
           class="flex-none h-8 w-8 block bg-white border border-gray-950 cursor-pointer rounded-lg disabled:opacity-50 disabled:pointer-events-none dark:bg-slate-900 dark:border-gray-300"
           :value="landmark.getColorHEX()" title="Choose your color" @change="changeColor($event)">
-        <Label v-show="!landmark.getEdit()" class="whitespace-nowrap" @dblclick.stop="landmark.setEdit(true)">
+        <Label v-show="!editing" class="whitespace-nowrap" @dblclick.stop="editing = true">
           {{ landmark.label }}
         </Label>
-        <Input v-show="landmark.getEdit()" @dblclick.stop="" type="text" :model-value="landmark.label"
-          class="flex grow h-auto" @focusout="landmark.setEdit(false)" @keyup.enter="landmark.setEdit(false)"
+        <Input v-show="editing" @dblclick.stop="" type="text" :model-value="landmark.label"
+          class="flex grow h-auto" @focusout="editing = false" @keyup.enter="editing = false"
           @update:model-value="changeLabel($event)" />
       </div>
       <div v-if="$slots.info" class="flex items-center h-full w-auto justify-end space-x-3 pr-3">
@@ -108,7 +115,7 @@ watch(() => props.landmark.isDragged, (isDragged) => {
           </Button>
         </template>
         <slot name="actions" :landmark="landmark" />
-        <Button class="w-6 h-6 p-0" variant="destructive" @click="emit('remove', landmark.getId())">
+        <Button class="w-6 h-6 p-0" variant="destructive" @click="emit('remove', landmark.id)">
           <PhX class="relative w-4 h-4 p-0" />
         </Button>
       </div>

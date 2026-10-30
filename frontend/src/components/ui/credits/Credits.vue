@@ -26,9 +26,7 @@ function initials(name: string): string {
     .join('')
 }
 
-const isDark = useDark({
-  storageKey: 'localStorage'
-})
+const isDark = useDark()
 </script>
 
 <template>

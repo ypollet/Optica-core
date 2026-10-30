@@ -5,7 +5,7 @@ import type { ImageName, ProjectImage } from "../models/image";
 import type { Pose } from "../models/landmark";
 
 // Common part of every app repository, apps only have to parse their /images payload
-export abstract class DataRepository<TData> implements Repository<TData> {
+export abstract class DataRepository<TData, TPosition extends Position = Position> implements Repository<TData, TPosition> {
     provider: DataProvider;
 
     constructor(provider: DataProvider) {
@@ -14,9 +14,9 @@ export abstract class DataRepository<TData> implements Repository<TData> {
 
     abstract getImages(objectPath: string): Promise<TData>
 
-    computeLandmarkPosition(objectPath: string, pose: Pose) : Promise<Position> {
+    computeLandmarkPosition(objectPath: string, pose: Pose) : Promise<TPosition> {
         return this.provider.computeLandmarkPosition(objectPath, pose.image.name, pose.marker).then((res) => {
-            return res.data as Position
+            return res.data as TPosition
         })
     }
 

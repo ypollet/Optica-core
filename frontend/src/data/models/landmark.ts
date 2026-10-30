@@ -23,9 +23,6 @@ export class Landmark {
     position : Position
     color: Color
     show: boolean
-    edit: boolean
-    isClicked: boolean
-    isDragged: boolean
 
     // pose.image may be the full image, only its reference is kept
     constructor(id: string, label: string, pose: Pose, position : Position, color: Color | null = null) {
@@ -33,11 +30,8 @@ export class Landmark {
         this.label = label
         this.pose = { marker: pose.marker, image: imageRef(pose.image) }
         this.position = position
-        this.edit = false
         this.color = color || Color.rgb(randomColorRGB())
         this.show = true
-        this.isClicked = false
-        this.isDragged = false
     }
 
     equals(other : Landmark | string | null | undefined){
@@ -58,16 +52,6 @@ export class Landmark {
         return { id: this.id, label: this.label, pose: this.pose, position : this.position, color: this.color.hex() }
     }
 
-    getId() : string {
-        return this.id
-    }
-    getLabel() : string {
-        return this.label
-    }
-    setLabel(label : string){
-        this.label = label
-    }
-
     getColorHEX() : string{
         return this.color.hex()
     }
@@ -86,24 +70,5 @@ export class Landmark {
             marker : pose,
             image : imageRef(image)
         }
-    }
-
-    getPose() : Pose {
-        return this.pose
-    }
-
-    setPosition(position : Position) {
-        this.position = position
-    }
-
-    getPosition() : Position {
-        return this.position
-    }
-
-    getEdit() : boolean{
-        return this.edit
-    }
-    setEdit(edit : boolean){
-        this.edit = edit
     }
 }

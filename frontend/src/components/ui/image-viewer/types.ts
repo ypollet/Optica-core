@@ -4,8 +4,6 @@ import type { Coordinates } from "../../../data/models/coordinates"
 export interface ViewerLandmark {
   id: string
   show?: boolean
-  isClicked?: boolean
-  isDragged?: boolean
   getColorHEX(): string
 }
 

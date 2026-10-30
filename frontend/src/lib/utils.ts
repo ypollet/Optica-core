@@ -31,9 +31,12 @@ export function randomColorRGB(): [number, number, number] {
   return [Math.floor(Math.random() * 256), Math.floor(Math.random() * 256), Math.floor(Math.random() * 256)]
 }
 
-// short random base-36 id (landmarks)
-export function randomID(): string {
-  return (Math.random() + 1).toString(36).substring(7)
+const ID_CHARS = "0123456789abcdefghijklmnopqrstuvwxyz"
+
+// random base-36 id of `length` characters (landmarks, also their first label: kept short).
+// getRandomValues works on http too, unlike crypto.randomUUID
+export function randomID(length: number = 5): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(length)), (byte) => ID_CHARS[byte % ID_CHARS.length]).join("")
 }
 
 export enum Scale {
@@ -62,11 +65,6 @@ export const ZOOM_MAX = 4
 export const DOT_RADIUS = 4.5
 export const SPACE_TARGET = 0.2
 export const ROUNDING = 2
-
-// length in image units -> length shown in `scale`, corrected by the calibration factor
-export function toScale(length: number, adjustFactor: number): number {
-  return length * adjustFactor
-}
 
 // calibration factor so that `length` is shown as `target` in `scale`
 export function adjustFactorFor(length: number, target: number, scale: ScaleUnit): number {

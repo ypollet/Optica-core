@@ -20,6 +20,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 <script setup lang="ts" generic="L extends ViewerLandmark">
 import { onBeforeUnmount, onMounted, shallowRef, useTemplateRef, watch, type HTMLAttributes } from 'vue'
 import { cn, DOT_RADIUS, ZOOM_MAX, ZOOM_MIN } from '../../../lib/utils'
+import { interaction } from '../../../lib/interaction'
 import type { Coordinates } from '../../../data/models/coordinates'
 import type { ProjectImage, Ratio, Size } from '../../../data/models/image'
 import type { Camera } from '../../../data/models/camera'
@@ -127,6 +128,8 @@ loadImage()
 watch(() => [props.image.name, props.image.image, props.image.thumbnail], loadImage)
 watch(() => [props.landmarks, props.distances, props.extraLandmarks], () => update(), { deep: true })
 watch(() => [props.size.width, props.size.height, props.camera.zoom], () => update())
+// a landmark pressed in a list is drawn bigger
+watch(() => interaction.pressed, () => update())
 
 let resizeObserver: ResizeObserver | null = null
 
@@ -145,6 +148,9 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   resizeObserver?.disconnect()
+  if (landmarkDragged.value) {
+    interaction.dragged = null
+  }
   loadToken++
 })
 
@@ -267,7 +273,7 @@ function drawImage(c: HTMLCanvasElement) {
       drawTarget(ctx, toCanvas(marker), dotRadius)
     } else {
       const stroke = (props.markerStroke ?? defaultMarkerStroke)(landmark)
-      drawDot(ctx, toCanvas(marker), landmark.isClicked ? dotRadius * 2 : dotRadius, landmark.getColorHEX(), stroke)
+      drawDot(ctx, toCanvas(marker), interaction.pressed == landmark.id ? dotRadius * 2 : dotRadius, landmark.getColorHEX(), stroke)
     }
   }
 
@@ -405,7 +411,7 @@ function startDrag(event: MouseEvent) {
       if (landmark) {
         emit('select', landmark)
         if (props.canDrag?.(landmark) ?? true) {
-          landmark.isDragged = true
+          interaction.dragged = landmark.id
           draggedPos = markerOf(landmark) ?? pos
           landmarkDragged.value = landmark
         }
@@ -442,7 +448,7 @@ function stopDrag(event: MouseEvent) {
   const landmark = landmarkDragged.value
   if (landmark != null) {
     const pos = clampToImage(eventPos(event))
-    landmark.isDragged = false
+    interaction.dragged = null
     landmarkDragged.value = null
     draggedPos = { x: -1, y: -1 }
     emit('move', landmark, pos)

@@ -76,7 +76,7 @@ Add the package to an app:
 ```
 
 ```ts
-import { Landmark, Distance, DataRepository, RepositoryFactory, ProviderFactory, OrthancProvider, cn } from "optica-core"
+import { Landmark, Distance, DataRepository, coreProviders, createProvider, cn } from "optica-core"
 import { Button } from "optica-core/ui/button"
 import "optica-core/assets/index.css"   // Tailwind v4 theme, also scans the core components
 ```
@@ -84,7 +84,7 @@ import "optica-core/assets/index.css"   // Tailwind v4 theme, also scans the cor
 An app keeps only its own payload type and parsing:
 
 ```ts
-import { DataRepository, ProviderFactory, OrthancProvider, RepositoryFactory, type ImageName, type Size } from "optica-core"
+import { DataRepository, coreProviders, createProvider, type ImageName, type Size } from "optica-core"
 
 export type RotationImage = ImageName & { angle: number, image: string, thumbnail?: string }
 export type ProjectData = { rotationImages: RotationImage[], size: Size }
@@ -97,10 +97,14 @@ export class RotationRepository extends DataRepository<ProjectData, RotationImag
     }
 }
 
-// main.ts
-ProviderFactory.register("ORTHANC", (url) => new OrthancProvider(url, "polaroptica"))
-RepositoryFactory.register("DATA", (provider) => new RotationRepository(provider))
+// data/setup.ts, imported first by main.ts
+// the provider of the backend set in .env (VITE_BACKEND_TYPE: WEB or ORTHANC, VITE_BACKEND_URL),
+// "polaroptica": the path of the app in Orthanc
+const repository = new RotationRepository(createProvider(coreProviders("polaroptica")))
+export function getRepository(): RotationRepository { return repository }
 ```
+
+An app with its own routes passes its own providers: `createProvider({ WEB: (url) => ..., ORTHANC: (url) => ... })` (sphaer).
 
 A landmark's `pose.image` is an `ImageRef` (`name`, `label`, `details?`), not the full image: `Landmark` and `setPose` take any image and keep only `imageRef(image)`, whose `details` are the app fields that are a string or a number (polar: `angle`, read with `angleOf(landmark)`). `Position.z` is optional so 2D (polar, spectral) and 3D (stack, depth) apps share them. App rules on them go in an `Annotations` subclass (polar's `acceptsAngle(distance, angle)`).
 
@@ -246,11 +250,11 @@ Same rule as the viewers: no store inside, the app binds its state with `v-model
 | `ToggleImage` | image toggle of the depth and stack `Sidebar` | `v-model` value of the shown image, `items` (`{ value, label }[]`); clicking the active button keeps it |
 | `AnnotationTabs` | tab block of every `Sidebar` | `tabs`, one slot per tab |
 | `AppMenu` | `Menu.vue` | `@import(text)`, `@export('csv' \| 'json')`, `#help-guide`, `#menus`, `credits` (content of Help › Credits, `{ developers, projects, institutions }`, kept by each viewer in `src/config/credits.ts`; no item without it; the shared logos are in `optica-core/assets/images/credits/`), `importable`/`exportable` (spectral: false) |
-| `ProjectLoader` | `CameraViewer` loaders | `load`, `queryKey` (needs `VueQueryPlugin`) |
+| `ProjectLoader` | `CameraViewer` loaders | `load`, called once when mounted (remount it with `:key` to load another object) |
 
 `units` (on `SelectScale`, `DistanceList`, `DistanceIteration`) restricts the units offered, depth leaves out `px`.
 
-`distance.length(scale)` returns a length in image units (the core `Distance` reads `distance`, or `distancePx` for the `px` scale). Shown lengths are `toScale(length, adjustFactor) / Scale[scale]`; `Annotations.scaled(length)` gives the same, rounded, in the scale of the annotations, and `Annotations.calibrate(distance, target)` sets `adjustFactor` from a known length.
+`distance.length(scale)` returns a length in image units: the core `Distance` sums its segments, physical (`distance`) or in pixels (`distancePx`) for the `px` scale. `Annotations.scaled(distance)` gives it in the scale of the annotations, corrected by `adjustFactor` and rounded; the lists show it through their `annotations` prop. `Annotations.calibrate(distance, target)` sets `adjustFactor` from a known length. The calibration is for physical lengths: it is not applied, nor set, in `px`.
 
 Export helpers (`lib/export.ts`): `downloadCSV`, `downloadJSON`, `exportFilename("polar", objectPath, "json")`, with the `Project` annotation methods above. They replace `file-saver`.
 
@@ -260,9 +264,9 @@ Kept per app: the logos (each app has its own artwork), the sidebar layouts arou
 
 - **Viewers**: `image-viewer` (+ `drawing.ts` helpers: `drawDot`, `drawTarget`, `pointInsideCircle`), `thumbnail-viewer`.
 - **Annotation UI**: `landmark`, `distance` (list, iteration), `select-scale`, `annotation-tabs`, `app-menu`, `project-loader`.
-- **UI** (`frontend/src/components/ui`): button, card, command, context-menu, credits, dialog, form*, input, input-group, label, menubar, scroll-area, select, separator, sheet, slider, switch, tabs, textarea, toggle, toggle-group — taken from polar (fully on reka-ui + Tailwind v4), card/credits from depth, form from sphaer. *optional peer deps (`vee-validate`; `@tanstack/vue-query` for `ProjectLoader`).
+- **UI** (`frontend/src/components/ui`): button, card, command, context-menu, credits, dialog, form*, input, input-group, label, menubar, scroll-area, select, separator, sheet, slider, switch, tabs, textarea, toggle, toggle-group — taken from polar (fully on reka-ui + Tailwind v4), card/credits from depth, form from sphaer. *optional peer dep (`vee-validate`).
 - **Assets**: `base.css`, `main.css`, `index.css` (theme), DejaVuSans font, target/dot icons, partner logos.
-- **Lib**: `cn`, angle conversions, `computeDistance`, `Scale`, viewer constants.
-- **Models**: `Project`, `Acquisition`, `Annotations`, `Coordinates`, `Position`, `ImageName`, `ProjectImage`, `Size`, `Camera`, `Marker`, `Landmark`, `Distance`, `DequeMax2`.
-- **Data layer**: `DataProvider`, `WebProvider`, `OrthancProvider`, `DataRepository`, `ProjectRepository`, `ProviderFactory`, `RepositoryFactory` (both now cache their instances and accept registrations).
+- **Lib**: `cn`, angle conversions, `computeDistance`, `Scale`, viewer constants, `interaction` (ids of the landmark pressed in a list and of the one dragged in the viewer: UI state, kept out of the models).
+- **Models**: `Project`, `Acquisition`, `Annotations`, `Coordinates`, `Position`, `ImageName`, `ProjectImage`, `Size`, `Camera`, `Landmark`, `Distance`, `DequeMax2`.
+- **Data layer**: `DataProvider`, `WebProvider`, `OrthancProvider`, `DataRepository`, `ProjectRepository`, `createProvider` / `coreProviders` (the provider of the backend set in `.env`).
 

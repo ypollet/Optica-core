@@ -4,8 +4,6 @@ import type { ListLandmark } from "../landmark/types"
 // What the distance lists need, the core Distance fits
 export interface ListDistance<L extends ListLandmark = ListLandmark> {
   label: string
-  edit_label: boolean
-  edit_distance: boolean
   landmarks: L[]
   show: boolean
   getColorHEX(): string

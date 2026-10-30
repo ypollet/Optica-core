@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { effectScope, isReactive, nextTick, reactive, shallowRef } from "vue"
 import Color from "color"
 import {
-  Acquisition, Annotations, Distance, Landmark, Project, usePersistedAnnotations,
+  Acquisition, Annotations, DequeMax2, Distance, Landmark, Project, usePersistedAnnotations,
   type ProjectImage,
 } from "../src"
 
@@ -170,6 +170,28 @@ describe("usePersistedAnnotations", () => {
     scope2.stop()
   })
 
+  it("doesn't write the storage for what isn't saved", async () => {
+    const storage = new MemoryStorage()
+    const current = shallowRef<Project | null>(null)
+    const scope = effectScope()
+    scope.run(() => usePersistedAnnotations(() => current.value, storage))
+    current.value = reactive(new Project("A1", [acquisition("rotation")])) as Project
+    await nextTick()
+    const annotations = current.value.acquisition!.annotations
+    annotations.landmarks.push(landmark("kept"))
+    await nextTick()
+    let writes = 0
+    const setItem = storage.setItem.bind(storage)
+    storage.setItem = (key, value) => { writes++; setItem(key, value) }
+    annotations.landmarks[0]!.show = false
+    await nextTick()
+    expect(writes).toBe(0)
+    annotations.landmarks[0]!.label = "renamed"
+    await nextTick()
+    expect(writes).toBe(1)
+    scope.stop()
+  })
+
   it("ignores a saved selection that doesn't fit the annotations", () => {
     const annotations = new Annotations()
     annotations.newDistance()
@@ -177,5 +199,44 @@ describe("usePersistedAnnotations", () => {
     expect([annotations.tab, annotations.selectedDistanceIndex]).toEqual(["distances", 0])
     annotations.setSelection({ selectedDistanceIndex: -1 })
     expect(annotations.selectedDistanceIndex).toBe(-1)
+  })
+})
+
+describe("scale", () => {
+  const distance = () => new Distance("d", [
+    new Landmark("a", "a", { marker: { x: 0, y: 0 }, image: image("i0") }, { x: 0, y: 0 }),
+    new Landmark("b", "b", { marker: { x: 3, y: 4 }, image: image("i0") }, { x: 30, y: 40 }),
+  ])
+
+  it("applies the calibration to physical lengths, not to pixels", () => {
+    const annotations = new Annotations()
+    annotations.adjustFactor = 2
+    annotations.scale = "cm"
+    expect(annotations.scaled(distance())).toBe(10)
+    annotations.scale = "px"
+    expect(annotations.scaled(distance())).toBe(5)
+  })
+
+  it("doesn't calibrate in pixels", () => {
+    const annotations = new Annotations()
+    annotations.scale = "px"
+    annotations.calibrate(distance(), 10)
+    expect(annotations.adjustFactor).toBe(1)
+    annotations.scale = "mm"
+    annotations.calibrate(distance(), 10)
+    expect(annotations.adjustFactor).toBe(0.2)
+  })
+})
+
+describe("DequeMax2", () => {
+  it("keeps the last two items, finds them with equals", () => {
+    const deque = new DequeMax2([landmark("a"), landmark("b"), landmark("c")])
+    expect(deque.items.map((l) => l.id)).toEqual(["b", "c"])
+    deque.add(landmark("c"))
+    expect(deque.items.map((l) => l.id)).toEqual(["b", "c"])
+    expect([deque.contains("b"), deque.contains(landmark("a")), deque.contains(null)]).toEqual([true, false, false])
+    deque.remove("unknown")
+    deque.remove("b")
+    expect([deque.first?.id, deque.last?.id, deque.isFull()]).toEqual(["c", "c", false])
   })
 })

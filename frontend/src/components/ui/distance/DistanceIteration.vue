@@ -38,6 +38,8 @@ defineSlots<{
 }>()
 
 const input = useTemplateRef('input')
+// the label is being typed
+const editing = ref<boolean>(false)
 const scrollSnapType = ref<boolean>(true)
 
 const length = computed(() => props.annotations.scaled(props.distance))
@@ -89,7 +91,7 @@ function showInput(event: MouseEvent) {
     emit('select', props.index)
     return
   }
-  props.distance.edit_label = true
+  editing.value = true
   input.value?.$el?.focus?.()
 }
 </script>
@@ -102,13 +104,13 @@ function showInput(event: MouseEvent) {
           <input type="color"
             class="h-8 w-8 block bg-white border border-gray-950 cursor-pointer rounded-lg disabled:opacity-50 disabled:pointer-events-none dark:bg-slate-900 dark:border-gray-300"
             :value="distance.getColorHEX()" title="Choose your color" @change="changeColor($event)">
-          <Label v-show="!distance.edit_label" class="flex whitespace-nowrap w-36 font-normal text-lg"
+          <Label v-show="!editing" class="flex whitespace-nowrap w-36 font-normal text-lg"
             @dblclick.stop="showInput">
             {{ distance.label }}
           </Label>
-          <Input v-show="distance.edit_label" ref="input" type="text" :model-value="distance.label"
-            class="flex h-auto w-full px-0" @focusout="distance.edit_label = false"
-            @keyup.enter="distance.edit_label = false" @update:model-value="changeLabel($event)" />
+          <Input v-show="editing" ref="input" type="text" :model-value="distance.label"
+            class="flex h-auto w-full px-0" @focusout="editing = false"
+            @keyup.enter="editing = false" @update:model-value="changeLabel($event)" />
         </div>
         <div class="flex row justify-end items-center space-x-3">
           <slot name="info" :distance="distance" />

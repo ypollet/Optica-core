@@ -1,5 +1,6 @@
 import { round } from "mathjs"
-import { adjustFactorFor, isScaleUnit, randomID, ROUNDING, Scale, toScale, type ScaleUnit } from "../../lib/utils"
+import { adjustFactorFor, isScaleUnit, randomID, ROUNDING, Scale, type ScaleUnit } from "../../lib/utils"
+import { is3D } from "./coordinates"
 import { Distance, type DistanceObject } from "./distance"
 import { Landmark, type LandmarkObject } from "./landmark"
 
@@ -39,14 +40,18 @@ export interface AnnotationsSet {
     toCSVRows(): string[][]
 }
 
-export const ANNOTATIONS_CSV_HEADER =["Group", "Group Label", "Landmark Label", "Color", "Pose_X", "Pose_Y", "Image", "ImageLabel", "X", "Y", "Z"]
+export const LANDMARK_CSV_HEADER =["Group", "Group Label", "Landmark Label", "Color"]
+export const POSE_CSV_HEADER = ["Pose_X", "Pose_Y", "Image", "ImageLabel"]
+export const POSITION_CSV_HEADER = ["X", "Y", "Z"]
+
+export const DEFAULT_CSV_HEADER = [...LANDMARK_CSV_HEADER, ...POSE_CSV_HEADER, ...POSITION_CSV_HEADER]
 
 // one CSV row (ANNOTATIONS_CSV_HEADER), `group`: label of the distance or profile of the landmark
 export function landmarkCSVRow(type: string, group: string, landmark: Landmark): string[] {
     const { marker, image } = landmark.pose
     const position = landmark.position
     return [type, group, landmark.label, landmark.getColorHEX(), marker.x.toFixed(5).toString(), marker.y.toFixed(5).toString(),
-        image.name, image.label, position.x.toFixed(5).toString(), position.y.toFixed(5).toString(), position.z?.toFixed(5).toString() ?? ""]
+        image.name, image.label, position.x.toFixed(5).toString(), position.y.toFixed(5).toString(), is3D(position) ? position.z.toFixed(5).toString() : ""]
 }
 
 // Landmarks and distances of an acquisition: all its images (group and standalone) share
@@ -96,9 +101,10 @@ export class Annotations implements AnnotationsSet {
         return this.toUnit(distance.length(this.scale))
     }
 
-    // length in image units (pixels for the "px" scale) -> in the current scale, corrected by the calibration
+    // length in image units -> in the current scale, corrected by the calibration.
+    // Pixels for the "px" scale: the calibration is made on physical lengths, it doesn't apply to them
     protected inScale(length: number): number {
-        return toScale(length, this.adjustFactor) / Scale[this.scale]
+        return this.scale == "px" ? length : length * this.adjustFactor / Scale[this.scale]
     }
 
     // inScale rounded for display (0 while it can't be measured)
@@ -106,10 +112,10 @@ export class Annotations implements AnnotationsSet {
         return length == undefined ? 0 : round(this.inScale(length), ROUNDING)
     }
 
-    // typing a known length on a distance calibrates the coordinate space
+    // typing a known length on a distance calibrates the coordinate space (not in pixels, see inScale)
     calibrate(distance: Distance, target: number) {
         const value = distance.length(this.scale)
-        if (value && target > 0) {
+        if (this.scale != "px" && value && target > 0) {
             this.adjustFactor = adjustFactorFor(value, target, this.scale)
         }
     }
@@ -196,7 +202,7 @@ export class Annotations implements AnnotationsSet {
     }
 
     csvHeader(): string[] {
-        return ANNOTATIONS_CSV_HEADER
+        return DEFAULT_CSV_HEADER
     }
 
     // one row per landmark, the ones of a distance carry its label (no header)

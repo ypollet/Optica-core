@@ -1,6 +1,6 @@
 {
   "name": "optica-core",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Shared frontend core of the Optica viewers",
   "license": "GPL-3.0-or-later",
   "type": "module",
@@ -31,7 +31,6 @@
   },
   "peerDependencies": {
     "@phosphor-icons/vue": "^2.2.1",
-    "@tanstack/vue-query": "^5.51.16",
     "@vueuse/core": "^11.3.0",
     "axios": "^1.6.7",
     "class-variance-authority": "^0.7.1",
@@ -49,14 +48,10 @@
   "peerDependenciesMeta": {
     "vee-validate": {
       "optional": true
-    },
-    "@tanstack/vue-query": {
-      "optional": true
     }
   },
   "devDependencies": {
     "@phosphor-icons/vue": "^2.2.1",
-    "@tanstack/vue-query": "^5.51.16",
     "@types/color": "^4.2.0",
     "@vue/tsconfig": "^0.5.1",
     "@vueuse/core": "^11.3.0",

@@ -34,17 +34,22 @@ export function usePersistedAnnotations(project: () => Project<any, any> | null 
         }
     }, { immediate: true })
 
-    // watch the annotations only, not the images of the project.
+    // Watches what is saved, serialized: only a change of it writes the storage, not the
+    // display state of the annotations (hover, drag) nor the images of the project.
     // Registered after the restore: it saves the restored annotations, never empty ones over them.
-    watch(() => project()?.acquisitions.map((acquisition) => acquisition.annotations), () => {
+    watch(() => {
         const loaded = project()
         if (!loaded) {
-            return
+            return undefined
         }
         const saved: SavedAnnotations = {
             annotations: loaded.annotationsToJSON(),
             selection: Object.fromEntries(loaded.acquisitions.map((acquisition) => [acquisition.id, acquisition.annotations.getSelection()])),
         }
-        storage.setItem(key(loaded.objectPath), JSON.stringify(saved))
-    }, { deep: true })
+        return { objectPath: loaded.objectPath, json: JSON.stringify(saved) }
+    }, (saved, previous) => {
+        if (saved && (saved.objectPath != previous?.objectPath || saved.json != previous.json)) {
+            storage.setItem(key(saved.objectPath), saved.json)
+        }
+    })
 }

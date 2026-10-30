@@ -32,7 +32,7 @@ defineSlots<{
 const scrollSnapType = ref<boolean>(true)
 
 function removeLandmark(id: string) {
-  landmarks.value = landmarks.value.filter((landmark) => landmark.getId() != id)
+  landmarks.value = landmarks.value.filter((landmark) => landmark.id != id)
   emit('remove', id)
 }
 </script>

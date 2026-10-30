@@ -1,4 +1,5 @@
 import type { DataProvider } from "../providers/providers";
+import type { Position } from "../models/coordinates";
 import type { ProjectImage } from "../models/image";
 import { Acquisition, Project, type AcquisitionObject } from "../models/project";
 import type { AnnotationsSet } from "../models/annotations";
@@ -16,8 +17,9 @@ export function parseAcquisitions<TImage extends ProjectImage>(data: any): Acqui
 }
 
 // Loads /images as a Project, apps whose payload differs pass a parser
-export class ProjectRepository<TImage extends ProjectImage = ProjectImage, TAcquisition extends Acquisition<TImage, AnnotationsSet> = Acquisition<TImage>>
-    extends DataRepository<Project<TImage, TAcquisition>> {
+// TPosition: Coords3D when the backend gives 3D positions (stack, depth)
+export class ProjectRepository<TImage extends ProjectImage = ProjectImage, TAcquisition extends Acquisition<TImage, AnnotationsSet> = Acquisition<TImage>, TPosition extends Position = Position>
+    extends DataRepository<Project<TImage, TAcquisition>, TPosition> {
     parse: ProjectParser<TImage>
     createAcquisition: AcquisitionFactory<TImage, TAcquisition>
 
