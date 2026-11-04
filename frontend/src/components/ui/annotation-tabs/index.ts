@@ -1,3 +1,3 @@
 export { default as AnnotationTabs } from "./AnnotationTabs.vue"
-export { DISTANCE_TAB, LANDMARK_TAB } from "./tabs"
+export { BOX_TAB, DISTANCE_TAB, LANDMARK_TAB, POLYGON_TAB } from "./tabs"
 export type { AnnotationTab } from "./tabs"

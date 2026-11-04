@@ -20,11 +20,14 @@ function initials(label: string) {
 
 <template>
   <Tabs :model-value="tab" @update:model-value="(value) => tab = String(value)" class="w-full my-4">
-    <!-- the selected tab takes the free space, the others shrink to their icon or initials -->
+    <!-- the selected tab takes the free space with its icon and label, the others shrink to their icon or initials -->
     <TabsList class="flex w-full">
       <TabsTrigger v-for="item in tabs" :key="item.value" :value="item.value" :title="item.label"
         :class="item.value == tab ? 'flex-1' : 'flex-none px-3 border-input hover:bg-background/60'">
-        <template v-if="item.value == tab">{{ item.label }}</template>
+        <template v-if="item.value == tab">
+          <component v-if="item.icon" :is="item.icon" />
+          {{ item.label }}
+        </template>
         <component v-else-if="item.icon" :is="item.icon" />
         <template v-else>{{ initials(item.label) }}</template>
       </TabsTrigger>

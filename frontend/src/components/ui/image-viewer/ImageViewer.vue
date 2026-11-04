@@ -17,16 +17,16 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
 -->
 
-<script setup lang="ts" generic="L extends ViewerLandmark">
-import { onBeforeUnmount, onMounted, shallowRef, useTemplateRef, watch, type HTMLAttributes } from 'vue'
+<script setup lang="ts" generic="L extends ViewerLandmark, P extends ViewerPolygon<L> = ViewerPolygon<L>, D extends ViewerDistance<L> = ViewerDistance<L>, B extends ViewerBox<L> = ViewerBox<L>">
+import { computed, onBeforeUnmount, onMounted, shallowRef, useTemplateRef, watch, type HTMLAttributes } from 'vue'
 import { cn, DOT_RADIUS, ZOOM_MAX, ZOOM_MIN } from '../../../lib/utils'
 import { interaction } from '../../../lib/interaction'
 import type { Coordinates } from '../../../data/models/coordinates'
 import type { ProjectImage, Ratio, Size } from '../../../data/models/image'
 import type { Camera } from '../../../data/models/camera'
 import type { Pose } from '../../../data/models/landmark'
-import { drawDot, drawTarget, pointInsideCircle } from './drawing'
-import type { ViewerDistance, ViewerDrawContext, ViewerLandmark } from './types'
+import { drawDot, drawLine, drawRect, drawRing, drawTarget, fillPolygon, pointInsideCircle } from './drawing'
+import type { ViewerBox, ViewerDistance, ViewerDrawContext, ViewerLandmark, ViewerPolygon } from './types'
 
 const props = withDefaults(defineProps<{
   image: ProjectImage
@@ -35,7 +35,15 @@ const props = withDefaults(defineProps<{
   // view state, owned by the app (usually a store) and updated in place by the viewer
   camera: Camera
   landmarks?: L[]
-  distances?: ViewerDistance<L>[]
+  distances?: D[]
+  polygons?: P[]
+  boxes?: B[]
+  // distance, polygon or box being drawn (one of the above), at most one at a time:
+  // - distance: its last landmark is ringed, dragging the middle of one of its segments inserts a landmark there
+  // - polygon: its closing side is dashed, a right click on its first landmark or Enter/Escape finishes it,
+  //   dragging the middle of one of its sides inserts a landmark there
+  // - box: once its first corner is placed, a dashed rectangle follows the mouse to show the box
+  opened?: D | P | B | null
   // landmarks that can be dragged but are drawn by the `draw` hook
   extraLandmarks?: L[]
   // false: the viewer only pans and zooms
@@ -48,7 +56,7 @@ const props = withDefaults(defineProps<{
   markerPosition?: (landmark: L) => Coordinates | undefined
   // outline of a landmark dot (default: black on its own image, white elsewhere)
   markerStroke?: (landmark: L) => string
-  // false: the landmark can be selected but not moved on this image
+  // false: the landmark can be selected but not moved on this image (e.g. Annotations.canMoveTo)
   canDrag?: (landmark: L) => boolean
   // app overlay, drawn on top in the image space
   draw?: (ctx: CanvasRenderingContext2D, view: ViewerDrawContext<L>) => void
@@ -56,6 +64,9 @@ const props = withDefaults(defineProps<{
 }>(), {
   landmarks: () => [],
   distances: () => [],
+  polygons: () => [],
+  boxes: () => [],
+  opened: null,
   extraLandmarks: () => [],
   editable: true,
   contextMenu: false,
@@ -65,10 +76,17 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   // right click on the image, outside of any landmark
   place: [pos: Coordinates, event: MouseEvent]
-  // right click on a landmark
+  // right click on a landmark (but the first one of the opened polygon)
   remove: [landmark: L]
+  // the opened polygon is done: right click on its first landmark, Enter or Escape
+  finish: [polygon: P]
+  // end of the drag of the middle of a side of the opened polygon (or a segment of the opened distance):
+  // a new landmark at `pos` goes at `index` of its landmarks
+  insert: [annotation: P | D, index: number, pos: Coordinates]
   // left click on a landmark
   select: [landmark: L]
+  // double click on a landmark, e.g. to go to its image
+  activate: [landmark: L]
   // end of the drag of a landmark
   move: [landmark: L, pos: Coordinates]
   // right click on the image when `contextMenu` is set
@@ -92,6 +110,35 @@ let shiftCanvas: Coordinates = { x: 0, y: 0 }
 let dragging = false
 const landmarkDragged = shallowRef<L | null>(null)
 let draggedPos: Coordinates = { x: -1, y: -1 }
+// the dragged landmark left its place: a click (or double click) on a landmark doesn't move it
+let landmarkMoved = false
+// side of the opened polygon or distance split by dragging its middle (the new landmark goes at `index`), drawn at draggedPos
+const inserting = shallowRef<{ annotation: P | D, index: number, moved: boolean } | null>(null)
+// mouse on the image while a box waits for its second corner (drawn as a target), null when it is out of the image
+const hoverPos = shallowRef<Coordinates | null>(null)
+// last mouse position on the canvas in client coordinates, null when it is out of it.
+// hoverPos is computed from it: the image under the mouse also changes with the zoom
+let mouseClient: Coordinates | null = null
+
+// `opened` according to the list it belongs to, null in the others
+const openDistance = computed(() => props.distances.find((distance) => distance === props.opened) ?? null)
+const openPolygon = computed(() => props.polygons.find((polygon) => polygon === props.opened) ?? null)
+const openBox = computed(() => props.boxes.find((box) => box === props.opened) ?? null)
+
+// first corner of the box being created while it waits for the second one, on the shown image only:
+// a box lies on a single image
+const boxStart = computed(() => {
+  const box = openBox.value
+  if (!props.editable || box == null || box.show === false || box.landmarks.length != 1 || !onShownImage(box.landmarks[0]!)) {
+    return null
+  }
+  return box.landmarks[0]!
+})
+
+// a box starts or ends: its preview starts from where the mouse is now, not from where it was the last time
+watch(boxStart, () => {
+  update()
+})
 
 function loadImage() {
   const token = ++loadToken
@@ -151,7 +198,8 @@ function setBaseImage(image: HTMLImageElement) {
 loadImage()
 
 watch(() => [props.image.name, props.image.image, props.image.thumbnail], loadImage)
-watch(() => [props.landmarks, props.distances, props.extraLandmarks], () => update(), { deep: true })
+watch(() => [props.landmarks, props.distances, props.polygons, props.boxes, props.opened, props.extraLandmarks],
+  () => update(), { deep: true })
 watch(() => [props.size.width, props.size.height, props.camera.zoom], () => update())
 // a landmark pressed in a list is drawn bigger
 watch(() => interaction.pressed, () => update())
@@ -169,10 +217,12 @@ onMounted(() => {
   if (imageContainer.value) {
     resizeObserver.observe(imageContainer.value)
   }
+  window.addEventListener('keydown', onKeydown)
 })
 
 onBeforeUnmount(() => {
   resizeObserver?.disconnect()
+  window.removeEventListener('keydown', onKeydown)
   if (landmarkDragged.value) {
     interaction.dragged = null
   }
@@ -214,9 +264,14 @@ function defaultMarkerPosition(landmark: L): Coordinates | undefined {
   return (landmark as { pose?: Pose }).pose?.marker
 }
 
-function defaultMarkerStroke(landmark: L): string {
+// placed on the shown image (or without a pose)
+function onShownImage(landmark: L): boolean {
   const pose = (landmark as { pose?: Pose }).pose
-  return (pose == undefined || pose.image.name == props.image.name) ? 'black' : 'white'
+  return pose == undefined || pose.image.name == props.image.name
+}
+
+function defaultMarkerStroke(landmark: L): string {
+  return onShownImage(landmark) ? 'black' : 'white'
 }
 
 function markerOf(landmark: L): Coordinates | undefined {
@@ -308,32 +363,84 @@ function drawImage(c: HTMLCanvasElement) {
     }
   }
 
-  // lines of the distances, dashed while one of their ends is dragged
+  // sides of the annotations
+  const lineWidth = radius / 4
+  const dashOf = (dashed: boolean) => dashed ? [10 / zoomX, 5 / zoomX] : []
+
+  // line between two image positions, nothing if one of them isn't on this image
+  const drawLink = (from: Coordinates | undefined, to: Coordinates | undefined, color: string, dashed: boolean) => {
+    if (from != undefined && to != undefined) {
+      drawLine(ctx, toCanvas(from), toCanvas(to), color, lineWidth, dashOf(dashed))
+    }
+  }
+
+  // line between two landmarks, dashed while one of them is dragged or when asked
+  const drawSegment = (previous: L, current: L, color: string, dashed: boolean = false) => {
+    const moving = previous === landmarkDragged.value || current === landmarkDragged.value
+    drawLink(markerOf(previous), markerOf(current), color, dashed || moving)
+  }
+
   props.distances.forEach((distance) => {
     if (distance.show === false) {
       return
     }
+    const color = distance.getColorHEX()
+    const split = inserting.value?.annotation === distance ? inserting.value.index : -1
     for (let i = 1; i < distance.landmarks.length; i++) {
-      const previous = distance.landmarks[i - 1]
-      const current = distance.landmarks[i]
-      const from = markerOf(previous)
-      const to = markerOf(current)
-      if (from == undefined || to == undefined) {
-        continue
+      if (i == split) {
+        drawLink(markerOf(distance.landmarks[i - 1]), draggedPos, color, true)
+        drawLink(draggedPos, markerOf(distance.landmarks[i]), color, true)
+      } else {
+        drawSegment(distance.landmarks[i - 1], distance.landmarks[i], color)
       }
-      const start = toCanvas(from)
-      const end = toCanvas(to)
-      ctx.beginPath()
-      ctx.moveTo(start.x, start.y)
-      ctx.lineTo(end.x, end.y)
-      const moving = previous === landmarkDragged.value || current === landmarkDragged.value
-      ctx.setLineDash(moving ? [10 / zoomX, 5 / zoomX] : [])
-      ctx.strokeStyle = distance.getColorHEX()
-      ctx.lineWidth = radius / 4
-      ctx.stroke()
-      ctx.closePath()
     }
-    ctx.setLineDash([])
+  })
+
+  // polygons: filled once they have an area, the closing side dashed while being drawn,
+  // the side being split goes through the dragged new landmark
+  props.polygons.forEach((polygon) => {
+    if (polygon.show === false) {
+      return
+    }
+    const color = polygon.getColorHEX()
+    const open = polygon === openPolygon.value
+    const split = inserting.value?.annotation === polygon ? inserting.value.index : -1
+    const markers = polygon.landmarks.map(markerOf)
+    if (split != -1) {
+      markers.splice(split, 0, draggedPos)
+    }
+    if (markers.length >= 3 && markers.every((marker) => marker != undefined)) {
+      fillPolygon(ctx, markers.map((marker) => toCanvas(marker!)), color)
+    }
+    const count = polygon.landmarks.length
+    const sides = count >= 3 ? count : count - 1
+    for (let i = 0; i < sides; i++) {
+      const previous = polygon.landmarks[i]
+      const current = polygon.landmarks[(i + 1) % count]
+      if (i + 1 == split) {
+        drawLink(markerOf(previous), draggedPos, color, true)
+        drawLink(draggedPos, markerOf(current), color, true)
+      } else {
+        drawSegment(previous, current, color, open && i == count - 1)
+      }
+    }
+  })
+
+  // boxes, dashed while one of their corners is dragged. The one being created follows the mouse
+  props.boxes.forEach((box) => {
+    if (box.show === false) {
+      return
+    }
+    const [first, second] = box.landmarks
+    const from = first && markerOf(first)
+    if (from == undefined) {
+      return
+    }
+    const to = second ? markerOf(second) : (first === boxStart.value ? hoverPos.value : null)
+    if (to != undefined) {
+      const moving = first === landmarkDragged.value || (second != undefined && second === landmarkDragged.value)
+      drawRect(ctx, toCanvas(from), toCanvas(to), box.getColorHEX(), lineWidth, dashOf(moving || second == undefined))
+    }
   })
 
   props.landmarks.forEach((landmark) => drawLandmark(landmark))
@@ -342,6 +449,48 @@ function drawImage(c: HTMLCanvasElement) {
       distance.landmarks.forEach((landmark) => drawLandmark(landmark))
     }
   })
+  props.polygons.forEach((polygon) => {
+    if (polygon.show !== false) {
+      polygon.landmarks.forEach((landmark) => drawLandmark(landmark))
+    }
+  })
+  props.boxes.forEach((box) => {
+    if (box.show !== false) {
+      box.landmarks.forEach((landmark) => drawLandmark(landmark))
+    }
+  })
+
+  // middles of the sides of the polygon or distance being drawn, or the new landmark dragged from one of them
+  if (inserting.value) {
+    drawTarget(ctx, toCanvas(draggedPos), radius)
+  } else {
+    midpoints().forEach(({ annotation, pos }) => drawDot(ctx, toCanvas(pos), radius * 0.6, 'white', annotation.getColorHEX()))
+  }
+
+  // ring emphasizing a landmark, not while it is dragged
+  const ringLandmark = (landmark: L | null | undefined, color: string) => {
+    const marker = landmark && markerOf(landmark)
+    if (marker != undefined && landmark !== landmarkDragged.value) {
+      drawRing(ctx, toCanvas(marker), radius, color)
+    }
+  }
+  // around the landmark a right click on finishes the polygon being drawn
+  if (openPolygon.value) {
+    ringLandmark(closingLandmark(), openPolygon.value.getColorHEX())
+  }
+  // around the last landmark of the distance being drawn, the next one is linked to it
+  if (openDistance.value && openDistance.value.show !== false) {
+    const landmarks = openDistance.value.landmarks
+    ringLandmark(landmarks[landmarks.length - 1], openDistance.value.getColorHEX())
+  }
+  // and around the first corner of the box being created
+  if (openBox.value) {
+    ringLandmark(boxStart.value, openBox.value.getColorHEX())
+  }
+  // where the second corner of the box being created goes, the same target as a dragged landmark
+  if (boxStart.value && hoverPos.value && landmarkDragged.value == null && inserting.value == null) {
+    drawTarget(ctx, toCanvas(hoverPos.value), radius)
+  }
 
   props.draw?.(ctx, {
     radius,
@@ -408,7 +557,50 @@ function zoomWithWheel(event: WheelEvent) {
   const deltaOffsetY = -((rect.height * deltaZoom) - rect.height) * (mouseY / rect.height)
 
   updateOffset(deltaOffsetX, deltaOffsetY)
+  updateHover()
   update()
+}
+
+// where the second corner of the box being created would go, nothing out of the image where no corner can be placed
+function updateHover() {
+  const pos = boxStart.value && mouseClient ? getPos(mouseClient) : null
+  hoverPos.value = pos && onImage(pos) ? pos : null
+}
+
+// middle of each segment of the distance/polygon being drawn,
+// `index`: where a landmark dragged from it is inserted. None when their landmarks can't be moved on this image (canDrag)
+function midpoints(): { annotation: P | D, index: number, pos: Coordinates }[] {
+  if (!props.editable) {
+    return []
+  }
+  const result: { annotation: P | D, index: number, pos: Coordinates }[] = []
+  const add = (annotation: P | D | null, closed: boolean) => {
+    if (annotation == null || annotation.show === false || annotation.landmarks.length < 2
+      || !(props.canDrag?.(annotation.landmarks[0]) ?? true)) {
+      return
+    }
+    const count = annotation.landmarks.length
+    const sides = closed && count >= 3 ? count : count - 1
+    for (let i = 0; i < sides; i++) {
+      const from = markerOf(annotation.landmarks[i])
+      const to = markerOf(annotation.landmarks[(i + 1) % count])
+      if (from && to) {
+        result.push({ annotation, index: i + 1, pos: { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 } })
+      }
+    }
+  }
+  add(openPolygon.value, true)
+  add(openDistance.value, false)
+  return result
+}
+
+// first landmark of the polygon being drawn once it has an area, undefined otherwise
+function closingLandmark(): L | undefined {
+  const polygon = openPolygon.value
+  if (polygon == null || polygon.show === false || polygon.landmarks.length < 3) {
+    return undefined
+  }
+  return polygon.landmarks[0]
 }
 
 // last landmark under pos, extra landmarks included
@@ -429,6 +621,16 @@ function hitLandmark(pos: Coordinates): L | null {
       distance.landmarks.forEach(check)
     }
   })
+  props.polygons.forEach((polygon) => {
+    if (polygon.show !== false) {
+      polygon.landmarks.forEach(check)
+    }
+  })
+  props.boxes.forEach((box) => {
+    if (box.show !== false) {
+      box.landmarks.forEach(check)
+    }
+  })
   props.extraLandmarks.forEach(check)
   return hit
 }
@@ -445,6 +647,13 @@ function startDrag(event: MouseEvent) {
           interaction.dragged = landmark.id
           draggedPos = markerOf(landmark) ?? pos
           landmarkDragged.value = landmark
+          landmarkMoved = false
+        }
+      } else {
+        const midpoint = midpoints().find((midpoint) => pointInsideCircle(pos, midpoint.pos, DOT_RADIUS / props.camera.zoom))
+        if (midpoint) {
+          inserting.value = { annotation: midpoint.annotation, index: midpoint.index, moved: false }
+          draggedPos = midpoint.pos
         }
       }
     }
@@ -453,7 +662,9 @@ function startDrag(event: MouseEvent) {
       return
     }
     const landmark = hitLandmark(pos)
-    if (landmark) {
+    if (landmark && landmark === closingLandmark()) {
+      emit('finish', openPolygon.value!)
+    } else if (landmark) {
       emit('remove', landmark)
     } else {
       emit('place', pos, event)
@@ -463,28 +674,70 @@ function startDrag(event: MouseEvent) {
 }
 
 function mousemove(event: MouseEvent) {
+  mouseClient = { x: event.clientX, y: event.clientY }
+  // followed while panning too
+  updateHover()
   if (dragging) {
-    if (landmarkDragged.value == null) {
+    if (landmarkDragged.value == null && inserting.value == null) {
       // no landmark to drag => pan image
       updateOffset(event.movementX, event.movementY)
     } else {
       draggedPos = clampToImage(eventPos(event))
+      if (inserting.value) {
+        inserting.value.moved = true
+      } else {
+        landmarkMoved = true
+      }
     }
+    update()
+  } else if (boxStart.value) {
     update()
   }
 }
 
 function stopDrag(event: MouseEvent) {
   dragging = false
+  if (event.type == 'mouseout') {
+    mouseClient = null
+    updateHover()
+  }
   const landmark = landmarkDragged.value
   if (landmark != null) {
     const pos = clampToImage(eventPos(event))
     interaction.dragged = null
     landmarkDragged.value = null
     draggedPos = { x: -1, y: -1 }
-    emit('move', landmark, pos)
+    if (landmarkMoved) {
+      emit('move', landmark, pos)
+    }
+  }
+  if (inserting.value != null) {
+    // a click without moving inserts at the middle of the side
+    const pos = inserting.value.moved ? clampToImage(eventPos(event)) : draggedPos
+    emit('insert', inserting.value.annotation, inserting.value.index, pos)
+    inserting.value = null
+    draggedPos = { x: -1, y: -1 }
   }
   update()
+}
+
+function onDoubleClick(event: MouseEvent) {
+  const landmark = hitLandmark(eventPos(event))
+  if (landmark) {
+    emit('activate', landmark)
+  }
+}
+
+// Enter or Escape finishes the polygon being drawn, unless typing (a label in the sidebar)
+function onKeydown(event: KeyboardEvent) {
+  if (!props.editable || openPolygon.value == null || event.defaultPrevented || (event.key != 'Enter' && event.key != 'Escape')) {
+    return
+  }
+  const target = event.target as HTMLElement | null
+  if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) {
+    return
+  }
+  emit('finish', openPolygon.value)
 }
 
 function onContextMenu(event: MouseEvent) {
@@ -508,9 +761,10 @@ defineExpose({ update, screenFit, getPos })
   <div ref="imageContainer"
     :class="cn('relative border w-full h-full flex justify-center items-center overflow-visible', props.class)"
     @wheel.prevent>
-    <canvas ref="canvas" tabindex="1" :class="landmarkDragged ? 'cursor-none' : 'cursor-pointer'"
+    <canvas ref="canvas" tabindex="1"
+      :class="landmarkDragged || inserting || (boxStart && hoverPos) ? 'cursor-none' : 'cursor-pointer'"
       @mousedown="startDrag" @mouseup="stopDrag" @mousemove="mousemove" @mouseout="stopDrag" @wheel="zoomWithWheel"
-      @contextmenu="onContextMenu">
+      @dblclick="onDoubleClick" @contextmenu="onContextMenu">
     </canvas>
   </div>
 </template>

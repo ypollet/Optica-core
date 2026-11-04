@@ -10,7 +10,7 @@ export type DistanceObject = {
 }
 
 // sum of the segments between consecutive landmarks, `point`: where a landmark is. undefined under two landmarks
-function sumOfSegments(landmarks: Landmark[], point: (landmark: Landmark) => Position) : number | undefined {
+export function sumOfSegments(landmarks: Landmark[], point: (landmark: Landmark) => Position) : number | undefined {
     if(landmarks.length < 2 ){
         return undefined
     }

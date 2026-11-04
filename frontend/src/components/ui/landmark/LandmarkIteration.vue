@@ -1,12 +1,12 @@
 <script setup lang="ts" generic="L extends ListLandmark">
-import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from "vue"
+import { computed, nextTick, onBeforeUnmount, useTemplateRef, watch } from "vue"
 import { PhEye, PhEyeSlash, PhX } from "@phosphor-icons/vue"
 import { Button } from "../button"
-import { Input } from "../input"
-import { Label } from "../label"
+import { LabelInput } from "../input"
 import { Separator } from "../separator"
 import { interaction } from "../../../lib/interaction"
 import type { ListLandmark } from "./types"
+import LandmarkIcon from "../../icons/LandmarkIcon.vue"
 
 const props = withDefaults(defineProps<{
   landmark: L
@@ -34,8 +34,6 @@ defineSlots<{
   actions?(props: { landmark: L }): any
 }>()
 
-// the label is being typed
-const editing = ref<boolean>(false)
 const dragged = computed(() => interaction.dragged == props.landmark.id)
 
 function changeColor(event: Event) {
@@ -44,10 +42,6 @@ function changeColor(event: Event) {
     return
   }
   props.landmark.setColorHEX(target.value)
-}
-
-function changeLabel(payload: string | number) {
-  props.landmark.label = payload.toString()
 }
 
 // The landmark stays pressed from pointer down until release, even while dragging the row.
@@ -83,21 +77,11 @@ watch(dragged, (isDragged) => {
     :class="{ 'dark:bg-purple-800 bg-purple-400': dragged || highlighted }">
     <div class="h-12 flex grow flex-row justify-between items-center font-normal px-3 py-2">
       <div class="flex flex-row w-full items-center justify-start space-x-3 py-3 mr-3">
-        <svg v-if="handle" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor"
-          xmlns="http://www.w3.org/2000/svg" class="flex-none mr-2 h-6 w-6 handle">
-          <path
-            d="M7.49985 0.877045C3.84216 0.877045 0.877014 3.84219 0.877014 7.49988C0.877014 11.1575 3.84216 14.1227 7.49985 14.1227C11.1575 14.1227 14.1227 11.1575 14.1227 7.49988C14.1227 3.84219 11.1575 0.877045 7.49985 0.877045ZM1.82701 7.49988C1.82701 4.36686 4.36683 1.82704 7.49985 1.82704C10.6328 1.82704 13.1727 4.36686 13.1727 7.49988C13.1727 10.6329 10.6328 13.1727 7.49985 13.1727C4.36683 13.1727 1.82701 10.6329 1.82701 7.49988ZM7.49999 9.49999C8.60456 9.49999 9.49999 8.60456 9.49999 7.49999C9.49999 6.39542 8.60456 5.49999 7.49999 5.49999C6.39542 5.49999 5.49999 6.39542 5.49999 7.49999C5.49999 8.60456 6.39542 9.49999 7.49999 9.49999Z"
-            fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"></path>
-        </svg>
+        <LandmarkIcon v-if="handle" class="flex-none mr-2 h-6 w-6 handle" />
         <input v-if="colorPicker" type="color"
           class="flex-none h-8 w-8 block bg-white border border-gray-950 cursor-pointer rounded-lg disabled:opacity-50 disabled:pointer-events-none dark:bg-slate-900 dark:border-gray-300"
           :value="landmark.getColorHEX()" title="Choose your color" @change="changeColor($event)">
-        <Label v-show="!editing" class="whitespace-nowrap" @dblclick.stop="editing = true">
-          {{ landmark.label }}
-        </Label>
-        <Input v-show="editing" @dblclick.stop="" type="text" :model-value="landmark.label"
-          class="flex grow h-auto" @focusout="editing = false" @keyup.enter="editing = false"
-          @update:model-value="changeLabel($event)" />
+        <LabelInput v-model="landmark.label" class="whitespace-nowrap" input-class="flex grow h-auto" />
       </div>
       <div v-if="$slots.info" class="flex items-center h-full w-auto justify-end space-x-3 pr-3">
         <Separator orientation="vertical" class="h-full w-0.5" />

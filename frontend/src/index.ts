@@ -10,6 +10,8 @@ export * from "./data/models/camera"
 export * from "./data/models/project"
 export * from "./data/models/landmark"
 export * from "./data/models/distance"
+export * from "./data/models/polygon"
+export * from "./data/models/boundingBox"
 export * from "./data/models/dequeMax2"
 export * from "./data/models/annotations"
 

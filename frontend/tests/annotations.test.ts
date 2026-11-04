@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest"
 import { effectScope, isReactive, nextTick, reactive, shallowRef } from "vue"
 import Color from "color"
 import {
-  Acquisition, Annotations, DequeMax2, Distance, Landmark, Project, usePersistedAnnotations,
+  Acquisition, Annotations, BoundingBox, DequeMax2, Distance, Landmark, Polygon, Project, usePersistedAnnotations,
+  usePersistedView,
   type ProjectImage,
 } from "../src"
 
@@ -55,7 +56,13 @@ describe("Annotations", () => {
     annotations.adjustFactor = 2
     annotations.scale = "mm"
     const saved = JSON.parse(JSON.stringify(annotations.toJSON()))
-    expect(saved.scale).toBe("mm")
+    expect(saved.scale).toEqual({ unit: "mm", factor: 1 })
+    // landmark(): marker (1, 2), position (10, 20); positions × scale_factor 2 in mm, the markers in px
+    expect(saved.landmarks[0].scaled_position).toEqual({ x: 20, y: 40 })
+    expect(saved.distances[0].landmarks[0].scaled_position).toEqual({ x: 20, y: 40 })
+    expect(annotations.toCSVRows()[0].slice(-4)).toEqual(["20.00000", "40.00000", "", "mm"])
+    annotations.scale = "px"
+    expect(annotations.toJSON().landmarks[0]).toMatchObject({ scaled_position: { x: 1, y: 2 } })
 
     const other = new Annotations()
     other.merge(saved)
@@ -72,6 +79,9 @@ describe("Annotations", () => {
 
     other.restore({ ...saved, scale: "parsec" })
     expect([other.landmarks.length, other.distances.length, other.scale]).toEqual([1, 1, "mm"])
+    // the saves before SavedScale have only the unit
+    other.restore({ ...saved, scale: "cm" })
+    expect(other.scale).toBe("cm")
   })
 })
 
@@ -120,7 +130,10 @@ describe("Project annotations", () => {
     const rows = project.annotationsToCSVRows()
     expect(rows[0].slice(0, 4)).toEqual(["Acquisition", "Group", "Group Label", "Landmark Label"])
     expect(rows[1].slice(0, 4)).toEqual(["UV", "Landmark", "", "u"])
-    expect(rows[1][rows[1].length - 1]).toBe("")
+    // as long as the header, no z for a 2D position, then the scaled position (px: the marker)
+    expect(rows[1].length).toBe(rows[0].length)
+    expect(rows[1][rows[0].indexOf("Z")]).toBe("")
+    expect(rows[1].slice(-4)).toEqual(["1.00000", "2.00000", "", "px"])
   })
 })
 
@@ -202,6 +215,32 @@ describe("usePersistedAnnotations", () => {
   })
 })
 
+describe("usePersistedView", () => {
+  it("shows again the image and the acquisition shown before the reload", async () => {
+    const storage = new MemoryStorage()
+    const load = () => reactive(new Project("S1", [acquisition("a", ["i0", "i1", "i2"]), acquisition("b", ["j0", "j1"])])) as Project
+
+    const current = shallowRef<Project | null>(null)
+    const scope = effectScope()
+    scope.run(() => usePersistedView(() => current.value, storage))
+    current.value = load()
+    await nextTick()
+    current.value.acquisition!.setIndex(2)
+    current.value.selectAcquisition("b")
+    current.value.acquisition!.setIndex(1)
+    await nextTick()
+    scope.stop()
+
+    const reloaded = shallowRef<Project | null>(null)
+    const scope2 = effectScope()
+    scope2.run(() => usePersistedView(() => reloaded.value, storage))
+    reloaded.value = load()
+    await nextTick()
+    expect([reloaded.value.acquisition!.id, reloaded.value.acquisition!.index, reloaded.value.getAcquisition("a")!.index]).toEqual(["b", 1, 2])
+    scope2.stop()
+  })
+})
+
 describe("scale", () => {
   const distance = () => new Distance("d", [
     new Landmark("a", "a", { marker: { x: 0, y: 0 }, image: image("i0") }, { x: 0, y: 0 }),
@@ -225,6 +264,185 @@ describe("scale", () => {
     annotations.scale = "mm"
     annotations.calibrate(distance(), 10)
     expect(annotations.adjustFactor).toBe(0.2)
+  })
+})
+
+describe("Polygon", () => {
+  // 3 x 4 rectangle in pixels, twice as big in physical units
+  const corner = (id: string, x: number, y: number, z?: number) =>
+    new Landmark(id, id, { marker: { x, y }, image: image("i0") }, z == undefined ? { x: 2 * x, y: 2 * y } : { x: 2 * x, y: 2 * y, z })
+  const rectangle = () => new Polygon("p", [corner("a", 0, 0), corner("b", 3, 0), corner("c", 3, 4), corner("d", 0, 4)])
+
+  it("is closed: measures the side back to the first landmark", () => {
+    expect([rectangle().perimeter("px"), rectangle().area("px")]).toEqual([14, 12])
+    expect([rectangle().perimeter("mm"), rectangle().area("mm")]).toEqual([28, 48])
+    const open = new Polygon("p", [corner("a", 0, 0), corner("b", 3, 0)])
+    expect([open.perimeter("px"), open.area("px")]).toEqual([undefined, undefined])
+  })
+
+  it("measures the area of a tilted polygon in 3D", () => {
+    // the rectangle raised along its height: its sides are 6 and 10 (8 along y, 6 along z)
+    const tilted = new Polygon("p", [corner("a", 0, 0, 0), corner("b", 3, 0, 0), corner("c", 3, 4, 6), corner("d", 0, 4, 6)])
+    expect(tilted.area("mm")).toBeCloseTo(60)
+  })
+
+  it("scales the area with the square of the calibration", () => {
+    const annotations = new Annotations()
+    annotations.adjustFactor = 2
+    annotations.scale = "cm"
+    expect([annotations.scaledPerimeter(rectangle()), annotations.scaledArea(rectangle())]).toEqual([5.6, 1.92])
+    annotations.scale = "px"
+    expect([annotations.scaledPerimeter(rectangle()), annotations.scaledArea(rectangle())]).toEqual([14, 12])
+  })
+
+  it("is drawn, finished, found, saved and restored like a distance", () => {
+    const annotations = new Annotations()
+    annotations.newPolygon().landmarks.push(...rectangle().landmarks)
+    expect([annotations.selectedPolygon?.label, annotations.selectedPolygonIndex]).toEqual(["Polygon 1", 0])
+    annotations.finishPolygon()
+    expect(annotations.selectedPolygon).toBeNull()
+    annotations.showInSidebar(annotations.polygons[0].landmarks[2])
+    expect([annotations.tab, annotations.selectedPolygonIndex]).toEqual(["polygons", 0])
+    expect(annotations.polygonOf("c")).toBe(annotations.polygons[0])
+
+    const saved = JSON.parse(JSON.stringify(annotations.toJSON()))
+    expect([saved.polygons[0].perimeter, saved.polygons[0].area]).toEqual([14, 12])
+    expect(annotations.toCSVRows().filter((row) => row[0] == "Polygon").length).toBe(4)
+    const other = new Annotations()
+    other.merge(saved)
+    other.merge(saved)
+    expect(other.polygons[1]).toBeInstanceOf(Polygon)
+    const ids = other.allLandmarks.map((l) => l.id)
+    expect(new Set(ids).size).toBe(8)
+    other.removeLandmark("a")
+    expect(other.polygons.map((polygon) => polygon.landmarks.length)).toEqual([3, 4])
+
+    // saves made before the polygons
+    other.restore({ landmarks: [], distances: [] })
+    expect([other.polygons.length, other.selectedPolygonIndex]).toEqual([0, -1])
+    other.setSelection({ selectedPolygonIndex: 3 })
+    expect(other.selectedPolygonIndex).toBe(-1)
+  })
+})
+
+describe("BoundingBox", () => {
+  // markers (1, 2) and (4, 6), positions twice as big
+  const corner = (id: string, x: number, y: number) =>
+    new Landmark(id, id, { marker: { x, y }, image: image("i0") }, { x: 2 * x, y: 2 * y, z: x })
+
+  it("measures along the image axes from any two opposite corners", () => {
+    const box = new BoundingBox("b", [corner("a", 4, 2), corner("b", 1, 6)])
+    expect([box.width("px"), box.height("px"), box.area("px")]).toEqual([3, 4, 12])
+    expect([box.width("mm"), box.height("mm"), box.area("mm")]).toEqual([6, 8, 48])
+    expect([box.center("px"), box.center("mm")]).toEqual([{ x: 2.5, y: 4 }, { x: 5, y: 8 }])
+    expect(new BoundingBox("b", [corner("a", 4, 2)]).area("px")).toBeUndefined()
+  })
+
+  it("is deselected with its second corner, so the next one starts a new box", () => {
+    const annotations = new Annotations()
+    const first = annotations.openBox()
+    annotations.addCorner(first, corner("a", 1, 2))
+    expect(annotations.openBox()).toBe(first)
+    annotations.addCorner(first, corner("b", 4, 6))
+    expect([annotations.selectedBoxIndex, first.isComplete()]).toEqual([-1, true])
+    // a third corner never goes to a complete box
+    annotations.addCorner(first, corner("c", 0, 0))
+    expect(first.landmarks.length).toBe(2)
+
+    const second = annotations.openBox()
+    annotations.addCorner(second, corner("d", 0, 0))
+    expect([annotations.boxes.length, annotations.selectedBoxIndex, second.label]).toEqual([2, 1, "Box 2"])
+    // a complete box selected in the list: the next corner starts a new box
+    annotations.selectedBoxIndex = 0
+    annotations.addCorner(annotations.openBox(), corner("e", 0, 0))
+    expect(annotations.boxes.map((box) => box.landmarks.length)).toEqual([2, 1, 1])
+    expect(annotations.selectedBoxIndex).toBe(2)
+  })
+
+  it("is found, scaled, saved and restored", () => {
+    const annotations = new Annotations()
+    annotations.addCorner(annotations.openBox(), corner("a", 1, 2))
+    annotations.addCorner(annotations.selectedBox ?? annotations.openBox(), corner("b", 4, 6))
+    annotations.showInSidebar(annotations.boxes[0].landmarks[1])
+    expect([annotations.tab, annotations.selectedBoxIndex]).toEqual(["boxes", 0])
+    expect(annotations.boxOf("a")).toBe(annotations.boxes[0])
+
+    annotations.adjustFactor = 2
+    annotations.scale = "cm"
+    const saved = JSON.parse(JSON.stringify(annotations.toJSON()))
+    expect([saved.boxes[0].width, saved.boxes[0].height, saved.boxes[0].area]).toEqual([1.2, 1.6, 1.92])
+    expect(saved.boxes[0].center).toEqual({ x: 1, y: 1.6 })
+    expect(annotations.toCSVRows().filter((row) => row[0] == "Box").length).toBe(2)
+
+    const other = new Annotations()
+    other.merge(saved)
+    other.merge(saved)
+    expect(other.boxes[1]).toBeInstanceOf(BoundingBox)
+    expect(new Set(other.allLandmarks.map((l) => l.id)).size).toBe(4)
+    other.removeLandmark("a")
+    expect(other.boxes.map((box) => box.landmarks.length)).toEqual([1, 2])
+    other.restore({ landmarks: [], distances: [] })
+    expect([other.boxes.length, other.selectedBoxIndex]).toEqual([0, -1])
+  })
+})
+
+describe("BoundingBox images", () => {
+  it("keeps both corners on the image of the first one", () => {
+    const annotations = new Annotations()
+    const on = (id: string, name: string) => new Landmark(id, id, { marker: { x: 1, y: 1 }, image: image(name) }, { x: 1, y: 1, z: 0 })
+    const box = annotations.openBox()
+    annotations.addCorner(box, on("a", "i0"))
+    expect([annotations.accepts(box, image("i0")), annotations.accepts(box, image("i1"))]).toEqual([true, false])
+    annotations.addCorner(box, on("b", "i1"))
+    expect([box.landmarks.length, annotations.selectedBoxIndex]).toEqual([1, 0])
+    annotations.addCorner(box, on("c", "i0"))
+    expect([box.landmarks.length, annotations.selectedBoxIndex]).toEqual([2, -1])
+  })
+})
+
+describe("placing", () => {
+  const on = (id: string, name: string) => new Landmark(id, id, { marker: { x: 1, y: 1 }, image: image(name) }, { x: 1, y: 1, z: 0 })
+
+  it("adds to the selected distance, polygon or box of the shown tab, a new one otherwise", () => {
+    const annotations = new Annotations()
+    expect(annotations.target()).toBeNull()
+    annotations.tab = "distances"
+    const distance = annotations.target()!
+    annotations.add(distance, on("a", "i0"))
+    expect(annotations.target()).toBe(distance)
+    annotations.tab = "boxes"
+    const box = annotations.target()!
+    annotations.add(box, on("b", "i0"))
+    annotations.add(box, on("c", "i0"))
+    expect([box.landmarks.length, annotations.target() === box, annotations.boxes.length]).toEqual([2, false, 2])
+  })
+
+  it("keeps the measures on one image when asked, boxes always", () => {
+    const annotations = new Annotations()
+    const distance = annotations.newDistance()
+    annotations.add(distance, on("a", "i0"))
+    expect([annotations.accepts(distance, image("i1")), annotations.canMoveTo(distance.landmarks[0]!, image("i1"))]).toEqual([true, true])
+    annotations.singleImageMeasures = true
+    expect([annotations.accepts(distance, image("i1")), annotations.canMoveTo(distance.landmarks[0]!, image("i1"))]).toEqual([false, false])
+    expect(annotations.canMoveTo(on("free", "i0"), image("i1"))).toBe(true)
+  })
+})
+
+describe("opened", () => {
+  it("is the selection of the shown tab", () => {
+    const annotations = new Annotations()
+    const distance = annotations.newDistance()
+    const polygon = annotations.newPolygon()
+    const box = annotations.openBox()
+    expect(annotations.opened).toBeNull()
+    annotations.tab = "distances"
+    expect(annotations.opened).toBe(distance)
+    annotations.tab = "polygons"
+    expect(annotations.opened).toBe(polygon)
+    annotations.tab = "boxes"
+    expect(annotations.opened).toBe(box)
+    annotations.selectedBoxIndex = -1
+    expect(annotations.opened).toBeNull()
   })
 })
 

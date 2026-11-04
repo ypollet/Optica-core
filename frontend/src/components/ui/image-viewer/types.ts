@@ -13,6 +13,20 @@ export interface ViewerDistance<L extends ViewerLandmark = ViewerLandmark> {
   getColorHEX(): string
 }
 
+// Always drawn closed, the last landmark linked back to the first one
+export interface ViewerPolygon<L extends ViewerLandmark = ViewerLandmark> {
+  landmarks: L[]
+  show?: boolean
+  getColorHEX(): string
+}
+
+// Rectangle along the image axes between its two landmarks (opposite corners)
+export interface ViewerBox<L extends ViewerLandmark = ViewerLandmark> {
+  landmarks: L[]
+  show?: boolean
+  getColorHEX(): string
+}
+
 // Given to the `draw` hook so apps can draw their own overlays (e.g. depth profiles)
 export interface ViewerDrawContext<L extends ViewerLandmark = ViewerLandmark> {
   // radius of a landmark dot in canvas units

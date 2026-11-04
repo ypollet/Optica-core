@@ -61,3 +61,62 @@ export function drawTarget(ctx: CanvasRenderingContext2D, center: Coordinates, r
   ctx.stroke()
   ctx.closePath()
 }
+
+// opacity of the inside of polygons and boxes
+const FILL_ALPHA = 0.2
+
+// Side of a distance, polygon or box, `dash` empty for a solid line
+export function drawLine(ctx: CanvasRenderingContext2D, start: Coordinates, end: Coordinates, color: string, width: number, dash: number[] = []) {
+  ctx.beginPath()
+  ctx.moveTo(start.x, start.y)
+  ctx.lineTo(end.x, end.y)
+  ctx.setLineDash(dash)
+  ctx.strokeStyle = color
+  ctx.lineWidth = width
+  ctx.stroke()
+  ctx.closePath()
+  ctx.setLineDash([])
+}
+
+// Inside of a polygon, its sides are drawn separately
+export function fillPolygon(ctx: CanvasRenderingContext2D, points: Coordinates[], color: string) {
+  ctx.beginPath()
+  points.forEach((point, i) => {
+    if (i == 0) {
+      ctx.moveTo(point.x, point.y)
+    } else {
+      ctx.lineTo(point.x, point.y)
+    }
+  })
+  ctx.closePath()
+  ctx.globalAlpha = FILL_ALPHA
+  ctx.fillStyle = color
+  ctx.fill()
+  ctx.globalAlpha = 1
+}
+
+// Filled rectangle along the canvas axes between two opposite corners
+export function drawRect(ctx: CanvasRenderingContext2D, first: Coordinates, second: Coordinates, color: string, width: number, dash: number[] = []) {
+  ctx.beginPath()
+  ctx.rect(first.x, first.y, second.x - first.x, second.y - first.y)
+  ctx.globalAlpha = FILL_ALPHA
+  ctx.fillStyle = color
+  ctx.fill()
+  ctx.globalAlpha = 1
+  ctx.setLineDash(dash)
+  ctx.strokeStyle = color
+  ctx.lineWidth = width
+  ctx.stroke()
+  ctx.closePath()
+  ctx.setLineDash([])
+}
+
+// Ring around a landmark dot of `radius` to emphasize it
+export function drawRing(ctx: CanvasRenderingContext2D, center: Coordinates, radius: number, color: string) {
+  ctx.beginPath()
+  ctx.arc(center.x, center.y, radius * 2, 0, 2 * Math.PI)
+  ctx.strokeStyle = color
+  ctx.lineWidth = radius / 3
+  ctx.stroke()
+  ctx.closePath()
+}

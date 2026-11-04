@@ -1,65 +1,63 @@
-<script setup lang="ts" generic="D extends ListDistance">
-import { computed, ref, useTemplateRef } from "vue"
+<script setup lang="ts" generic="A extends ListAnnotation">
+import { ref } from "vue"
 import draggable from "vuedraggable"
 import { PhEraser, PhEye, PhEyeSlash, PhX } from "@phosphor-icons/vue"
 import type { ScaleUnit } from "../../../lib/utils"
 import { Button } from "../button"
-import { Input } from "../input"
-import { Label } from "../label"
+import { LabelInput } from "../input"
 import { LandmarkIteration } from "../landmark"
 import { SelectScale } from "../select-scale"
-import type { ListAnnotations, ListDistance } from "./types"
+import type { ListAnnotation, ListScale } from "./types"
 
+// A distance, polygon or box: its header, its landmarks while selected and its values
 const props = withDefaults(defineProps<{
-  distance: D
+  annotation: A
   // its scale select changes the scale of the annotations
-  annotations: ListAnnotations<D>
+  annotations: ListScale
   index: number
-  // the selected distance shows its landmarks and its length
+  // the selected one shows its landmarks and its scale select
   selected?: boolean
   // units of the scale select
   units?: ScaleUnit[]
+  // shows the scale select even if not selected
+  scaleSelect?: boolean
+  // its landmarks can be reordered by dragging them (the sides of a distance or polygon follow their order)
+  reorderable?: boolean
 }>(), {
   selected: true,
+  reorderable: true,
 })
 
 const emit = defineEmits<{
   // the delete button, or the last landmark was removed
   delete: [index: number]
-  // double click on the label of a distance that isn't selected
+  // double click on the label while not selected
   select: [index: number]
 }>()
 
 defineSlots<{
-  // next to the buttons of the header, e.g. the angle of the distance
-  info?(props: { distance: D }): any
+  // next to the buttons of the header, e.g. the angle of the annotation
+  info?(props: { annotation: A }): any
   // right column of each landmark
-  'landmark-info'?(props: { landmark: D["landmarks"][number] }): any
+  'landmark-info'?(props: { landmark: A["landmarks"][number] }): any
+  // its measures, left of the scale select
+  values?(): any
 }>()
 
-const input = useTemplateRef('input')
-// the label is being typed
-const editing = ref<boolean>(false)
 const scrollSnapType = ref<boolean>(true)
-
-const length = computed(() => props.annotations.scaled(props.distance))
 
 function changeColor(event: Event) {
   const target = event.currentTarget as HTMLInputElement | null
   if (target == null) {
     return
   }
-  props.distance.setColorHEX(target.value)
-  props.distance.landmarks.forEach((landmark) => landmark.setColorHEX(target.value))
-}
-
-function changeLabel(payload: string | number) {
-  props.distance.label = payload.toString()
+  props.annotation.setColorHEX(target.value)
+  props.annotation.landmarks.forEach((landmark) => landmark.setColorHEX(target.value))
 }
 
 function removeLandmark(id: string) {
-  props.distance.remove(id)
-  if (props.distance.landmarks.length == 0) {
+  props.annotation.remove(id)
+  if (props.annotation.landmarks.length == 0) {
     emit('delete', props.index)
   }
 }
@@ -67,7 +65,7 @@ function removeLandmark(id: string) {
 // Reorder the landmarks live while dragging. Sortable's own DOM move is cancelled
 // (return false) so Vue is the only one moving the elements.
 function onMoveLandmark(evt: any) {
-  const landmarks = props.distance.landmarks
+  const landmarks = props.annotation.landmarks
   const from = landmarks.indexOf(evt.draggedContext.element)
   const to = evt.draggedContext.futureIndex
   if (from !== -1 && from !== to && to < landmarks.length) {
@@ -84,16 +82,6 @@ function onEndDrag(evt: any) {
   evt.item.remove()
   evt.from.insertBefore(evt.item, evt.from.children[evt.newIndex] ?? null)
 }
-
-function showInput(event: MouseEvent) {
-  event.preventDefault()
-  if (!props.selected) {
-    emit('select', props.index)
-    return
-  }
-  editing.value = true
-  input.value?.$el?.focus?.()
-}
 </script>
 
 <template>
@@ -103,24 +91,19 @@ function showInput(event: MouseEvent) {
         <div class="flex grow row w-full justify-start items-center space-x-3 mr-3">
           <input type="color"
             class="h-8 w-8 block bg-white border border-gray-950 cursor-pointer rounded-lg disabled:opacity-50 disabled:pointer-events-none dark:bg-slate-900 dark:border-gray-300"
-            :value="distance.getColorHEX()" title="Choose your color" @change="changeColor($event)">
-          <Label v-show="!editing" class="flex whitespace-nowrap w-36 font-normal text-lg"
-            @dblclick.stop="showInput">
-            {{ distance.label }}
-          </Label>
-          <Input v-show="editing" ref="input" type="text" :model-value="distance.label"
-            class="flex h-auto w-full px-0" @focusout="editing = false"
-            @keyup.enter="editing = false" @update:model-value="changeLabel($event)" />
+            :value="annotation.getColorHEX()" title="Choose your color" @change="changeColor($event)">
+          <LabelInput v-model="annotation.label" :editable="selected" class="flex whitespace-nowrap w-36 font-normal text-lg"
+            input-class="flex h-auto w-full px-0" @dblclick="selected || emit('select', index)" />
         </div>
         <div class="flex row justify-end items-center space-x-3">
-          <slot name="info" :distance="distance" />
-          <Button class="relative w-6 h-6 p-0" v-show="distance.show" variant="secondary" @click="distance.show = false">
+          <slot name="info" :annotation="annotation" />
+          <Button class="relative w-6 h-6 p-0" v-show="annotation.show" variant="secondary" @click="annotation.show = false">
             <PhEye class="relative w-4 h-4 p-0" />
           </Button>
-          <Button class="relative w-6 h-6 p-0" v-show="!distance.show" variant="secondary" @click="distance.show = true">
+          <Button class="relative w-6 h-6 p-0" v-show="!annotation.show" variant="secondary" @click="annotation.show = true">
             <PhEyeSlash class="relative w-4 h-4 p-0" />
           </Button>
-          <Button class="relative w-6 h-6 p-0" variant="secondary" @click="distance.reset()">
+          <Button class="relative w-6 h-6 p-0" variant="secondary" @click="annotation.reset()">
             <PhEraser class="relative w-4 h-4 p-0" />
           </Button>
           <Button class="relative w-6 h-6 p-0" variant="destructive" @click="emit('delete', index)">
@@ -130,12 +113,13 @@ function showInput(event: MouseEvent) {
       </div>
     </div>
 
-    <div v-if="selected" class="overflow-auto min-h-16 max-h-96 w-full border"
+    <div v-if="selected && annotation.landmarks.length > 0" class="overflow-auto min-h-16 max-h-64 w-full border"
       :class="{ 'scroll-snap-type': scrollSnapType }">
-      <draggable :model-value="distance.landmarks" :move="onMoveLandmark" :group="distance.label + '_landmarks_' + index"
-        item-key="id" :force-fallback="true" :scroll="true" :bubbleScroll="true" :handle="'.handle'"
-        class="relative w-fit min-w-full" @start="scrollSnapType = false" @end="onEndDrag">
-        <template #item="{ element }: { element: D['landmarks'][number] }">
+      <draggable v-if="reorderable" :model-value="annotation.landmarks" :move="onMoveLandmark"
+        :group="annotation.label + '_landmarks_' + index" item-key="id" :force-fallback="true" :scroll="true"
+        :bubbleScroll="true" :handle="'.handle'" class="relative w-fit min-w-full" @start="scrollSnapType = false"
+        @end="onEndDrag">
+        <template #item="{ element }: { element: A['landmarks'][number] }">
           <LandmarkIteration :landmark="element" :color-picker="false" :visibility-toggle="false"
             @remove="removeLandmark">
             <template v-if="$slots['landmark-info']" #info="slotProps">
@@ -144,15 +128,19 @@ function showInput(event: MouseEvent) {
           </LandmarkIteration>
         </template>
       </draggable>
+      <template v-else>
+        <LandmarkIteration v-for="landmark in annotation.landmarks" :key="landmark.id" :landmark="landmark"
+          :color-picker="false" :visibility-toggle="false" :handle="false" @remove="removeLandmark">
+          <template v-if="$slots['landmark-info']" #info="slotProps">
+            <slot name="landmark-info" v-bind="slotProps" />
+          </template>
+        </LandmarkIteration>
+      </template>
     </div>
     <div class="flex row justify-between">
-      <div class="flex row space-x-1">
-        <Label class="flex whitespace-nowrap w-auto items-center">Distance :</Label>
-        <Label class="flex whitespace-nowrap w-auto items-center">{{ length }} {{ annotations.scale }}</Label>
-      </div>
-      <SelectScale v-if="selected" v-model="annotations.scale" :units="units" />
+      <slot name="values" />
+      <SelectScale v-if="selected || scaleSelect" v-model="annotations.scale" :units="units" />
       <div v-else />
-      
     </div>
   </div>
 </template>
