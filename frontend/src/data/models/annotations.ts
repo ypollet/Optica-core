@@ -1,8 +1,10 @@
+import type Color from "color"
 import { round } from "mathjs"
+import { reactive } from "vue"
 import { adjustFactorFor, isScaleUnit, randomID, ROUNDING, Scale, type ScaleUnit } from "../../lib/utils"
 import { is3D, type Coordinates, type Position } from "./coordinates"
 import { Distance, type DistanceObject } from "./distance"
-import { Landmark, type LandmarkObject } from "./landmark"
+import { Landmark, type LandmarkObject, type Pose } from "./landmark"
 import { Polygon, type PolygonObject } from "./polygon"
 import { BoundingBox, type BoundingBoxObject } from "./boundingBox"
 import type { ImageRef } from "./image"
@@ -80,15 +82,22 @@ export const DEFAULT_CSV_HEADER = [...LANDMARK_CSV_HEADER, ...POSE_CSV_HEADER, .
 
 // a landmark saved with its position in the unit of the measures (ignored when loaded)
 export type ScaledLandmarkObject = LandmarkObject & {
-    scaled_position: Position
+    scaled_position: Position | null
 }
 
 // one CSV row (DEFAULT_CSV_HEADER), `group`: label of the distance, polygon, box or profile of the landmark
 export function landmarkCSVRow(type: string, group: string, landmark: Landmark): string[] {
     const { marker, image } = landmark.pose
-    const position = landmark.position
     return [type, group, landmark.label, landmark.getColorHEX(), marker.x.toFixed(5).toString(), marker.y.toFixed(5).toString(),
-        image.name, image.label, position.x.toFixed(5).toString(), position.y.toFixed(5).toString(), is3D(position) ? position.z.toFixed(5).toString() : ""]
+        image.name, image.label, ...positionCSV(landmark.position)]
+}
+
+// the columns of POSITION_CSV_HEADER, empty while the position isn't known
+export function positionCSV(position: Position | null): string[] {
+    if (position == null) {
+        return ["", "", ""]
+    }
+    return [position.x.toFixed(5), position.y.toFixed(5), is3D(position) ? position.z.toFixed(5) : ""]
 }
 
 // Landmarks, distances, polygons and bounding boxes of an acquisition: all its images (group and standalone) share
@@ -200,6 +209,17 @@ export class Annotations implements AnnotationsSet {
             id = randomID()
         } while (used.has(id))
         return id
+    }
+
+    // New landmark at the pose, to be shown at once: its position is null until computePosition (the backend) gives it.
+    // Reactive, so the late position updates the views once it is stored
+    createLandmark(pose: Pose, computePosition: ((pose: Pose) => Promise<Position>) | null, color?: Color): Landmark {
+        const id = this.generateID()
+        const landmark = reactive(new Landmark(id, id, pose, null, color)) as Landmark
+        computePosition?.(pose).then((position) => {
+            landmark.position = position
+        })
+        return landmark
     }
 
     distanceOf(landmark: Landmark | string): Distance | undefined {
@@ -349,12 +369,16 @@ export class Annotations implements AnnotationsSet {
         }
     }
 
-    // position of the landmark in the current scale, calibrated, not rounded (px: its marker on its image)
-    scaledPosition(landmark: Landmark): Position {
+    // position of the landmark in the current scale, calibrated, not rounded (px: its marker on its image).
+    // null while its position isn't known
+    scaledPosition(landmark: Landmark): Position | null {
         if (this.scale == "px") {
             return { ...landmark.pose.marker }
         }
         const position = landmark.position
+        if (position == null) {
+            return null
+        }
         const x = this.inScale(position.x)
         const y = this.inScale(position.y)
         return is3D(position) ? { x, y, z: this.inScale(position.z) } : { x, y }
@@ -362,8 +386,7 @@ export class Annotations implements AnnotationsSet {
 
     // the columns of SCALED_POSITION_CSV_HEADER
     scaledPositionCSV(landmark: Landmark): string[] {
-        const position = this.scaledPosition(landmark)
-        return [position.x.toFixed(5), position.y.toFixed(5), is3D(position) ? position.z.toFixed(5) : "", this.scale]
+        return [...positionCSV(this.scaledPosition(landmark)), this.scale]
     }
 
     // the landmark saved with its scaled position

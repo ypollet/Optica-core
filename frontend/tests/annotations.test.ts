@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { effectScope, isReactive, nextTick, reactive, shallowRef } from "vue"
+import { effectScope, isReactive, nextTick, reactive, shallowRef, watchEffect } from "vue"
 import Color from "color"
 import {
   Acquisition, Annotations, BoundingBox, DequeMax2, Distance, Landmark, Polygon, Project, usePersistedAnnotations,
@@ -456,5 +456,36 @@ describe("DequeMax2", () => {
     deque.remove("unknown")
     deque.remove("b")
     expect([deque.first?.id, deque.last?.id, deque.isFull()]).toEqual(["c", "c", false])
+  })
+})
+
+describe("createLandmark", () => {
+  it("shows the landmark at once, its position comes later", async () => {
+    const annotations = reactive(new Annotations())
+    // physical: the px scale measures the markers
+    annotations.scale = "mm"
+    const distance = annotations.newDistance()
+    distance.landmarks.push(landmark("a"))
+    let resolve: (position: { x: number, y: number }) => void = () => {}
+    const created = annotations.createLandmark({ marker: { x: 3, y: 4 }, image: image("i0") }, () => new Promise((r) => { resolve = r }))
+    distance.landmarks.push(created)
+    expect(distance.landmarks[1]!.position).toBeNull()
+    // measures and exports wait for the position
+    expect(annotations.scaled(distance)).toBe(0)
+    expect(annotations.scaledPositionCSV(created)).toEqual(["", "", "", annotations.scale])
+    let seen: unknown = null
+    const scope = effectScope()
+    scope.run(() => watchEffect(() => { seen = distance.landmarks[1]!.position }, { flush: "sync" }))
+    resolve({ x: 13, y: 20 })
+    await nextTick()
+    expect(distance.landmarks[1]!.position).toEqual({ x: 13, y: 20 })
+    expect(seen).toEqual({ x: 13, y: 20 })
+    expect(distance.distance).toBe(3)
+    scope.stop()
+  })
+
+  it("leaves the position to the caller without computePosition", () => {
+    const created = new Annotations().createLandmark({ marker: { x: 3, y: 4 }, image: image("i0") }, null)
+    expect(created.position).toBeNull()
   })
 })

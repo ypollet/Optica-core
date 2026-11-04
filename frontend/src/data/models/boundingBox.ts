@@ -9,14 +9,16 @@ export type BoundingBoxObject = {
     color: string,
 }
 
-// the two first landmarks in image units: pixels for the "px" scale, physical otherwise. undefined under two landmarks
+// the two first landmarks in image units: pixels for the "px" scale, physical otherwise.
+// undefined under two landmarks or while a position isn't known
 function corners(landmarks: Landmark[], scale?: ScaleUnit): [Coordinates, Coordinates] | undefined {
     const [first, second] = landmarks
     if (first == undefined || second == undefined) {
         return undefined
     }
     const point = (landmark: Landmark) => scale == "px" ? landmark.pose.marker : landmark.position
-    return [point(first), point(second)]
+    const [from, to] = [point(first), point(second)]
+    return from && to ? [from, to] : undefined
 }
 
 // extent along x and y between the two corners

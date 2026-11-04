@@ -11,11 +11,12 @@ export type PolygonObject = {
 }
 
 // area enclosed by the points in order: shoelace formula in 2D, Newell's method in 3D
-// (the norm of the vector area, exact for a planar polygon). undefined under three points
-function enclosedArea(points: Position[]): number | undefined {
-    if (points.length < 3) {
+// (the norm of the vector area, exact for a planar polygon). undefined under three points or while a position isn't known
+function enclosedArea(known: (Position | null)[]): number | undefined {
+    if (known.length < 3 || known.some((point) => point == null)) {
         return undefined
     }
+    const points = known as Position[]
     const normal = { x: 0, y: 0, z: 0 }
     points.forEach((current, i) => {
         const next = points[(i + 1) % points.length]!

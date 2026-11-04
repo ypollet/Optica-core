@@ -20,7 +20,11 @@ export function is3D(position: Position): position is Coords3D {
     return "z" in position && typeof position.z === "number"
 }
 
-export function vectorToString(vector: Position) {
+// "…" while the position isn't known (waiting for the backend)
+export function vectorToString(vector: Position | null) {
+    if (vector == null) {
+        return "…"
+    }
     const values = is3D(vector) ? [vector.x, vector.y, vector.z] : [vector.x, vector.y]
     return `(${values.map((v) => v.toFixed(ROUNDING)).join("; ")})`
 }

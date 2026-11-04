@@ -9,12 +9,14 @@ export type DistanceObject = {
     color: string,
 }
 
-// sum of the segments between consecutive landmarks, `point`: where a landmark is. undefined under two landmarks
-export function sumOfSegments(landmarks: Landmark[], point: (landmark: Landmark) => Position) : number | undefined {
-    if(landmarks.length < 2 ){
+// sum of the segments between consecutive landmarks, `point`: where a landmark is.
+// undefined under two landmarks or while a position isn't known
+export function sumOfSegments(landmarks: Landmark[], point: (landmark: Landmark) => Position | null) : number | undefined {
+    const points = landmarks.map(point)
+    if(points.length < 2 || points.some((point) => point == null)){
         return undefined
     }
-    return computeDistance(landmarks.slice(1).map((landmark, i) => distanceVector(point(landmarks[i]!), point(landmark))))
+    return computeDistance(points.slice(1).map((current, i) => distanceVector(points[i]!, current!)))
 }
 
 export class Distance {

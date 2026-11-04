@@ -12,7 +12,7 @@ export type LandmarkObject = {
     id: string
     label: string
     pose: Pose
-    position : Position
+    position : Position | null
     color: string
 }
 
@@ -20,12 +20,12 @@ export class Landmark {
     id: string
     label: string
     pose: Pose
-    position : Position
+    position : Position | null
     color: Color
     show: boolean
 
     // pose.image may be the full image, only its reference is kept
-    constructor(id: string, label: string, pose: Pose, position : Position, color: Color | null = null) {
+    constructor(id: string, label: string, pose: Pose, position : Position | null, color: Color | null = null) {
         this.id = id
         this.label = label
         this.pose = { marker: pose.marker, image: imageRef(pose.image) }
