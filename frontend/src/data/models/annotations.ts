@@ -1,7 +1,7 @@
 import type Color from "color"
 import { round } from "mathjs"
 import { reactive } from "vue"
-import { adjustFactorFor, isScaleUnit, randomID, ROUNDING, Scale, type ScaleUnit } from "../../lib/utils"
+import { adjustFactorFor, randomID, readScaleUnit, ROUNDING, Scale, type ScaleUnit } from "../../lib/utils"
 import { is3D, type Coordinates, type Position } from "./coordinates"
 import { Distance, type DistanceObject } from "./distance"
 import { Landmark, type LandmarkObject, type Pose } from "./landmark"
@@ -35,11 +35,12 @@ export type SavedScale = {
     factor: number
 }
 
-// Saved form of the annotations of an acquisition (scale_factor: key of the first polar exports,
-// scale: only its unit in the saves before SavedScale)
+// Saved form of the annotations of an acquisition. merge reads any part of it: only the fields a file has
+// (scale_factor: key of the first polar exports; scale: SavedScale, or only its unit or its factor in
+// older saves, see readScaleUnit)
 export type AnnotationsObject = {
     scale_factor: number
-    scale?: SavedScale | ScaleUnit
+    scale?: SavedScale | ScaleUnit | number
     landmarks: LandmarkObject[]
     distances: DistanceAnnotationObject[]
     // missing from the saves made before the polygons
@@ -192,14 +193,22 @@ export class Annotations implements AnnotationsSet {
         return measure ? this.accepts(measure, image) : true
     }
 
-    // landmarks on their own and the ones of the distances, polygons and boxes
-    get allLandmarks(): Landmark[] {
+    
+
+    // landmarks on their own and the ones of the distances, polygons and boxes: each gets its position
+    // by itself from the backend (not extended by subclasses: depth profiles get their ends with the profile)
+    get coreLandmarks(): Landmark[] {
         return [
             ...this.landmarks,
             ...this.distances.flatMap((distance) => distance.landmarks),
             ...this.polygons.flatMap((polygon) => polygon.landmarks),
             ...this.boxes.flatMap((box) => box.landmarks),
         ]
+    }
+
+    // every landmark: the ones below, and the ones subclasses add (depth profiles)
+    get allLandmarks(): Landmark[] {
+        return this.coreLandmarks
     }
 
     generateID(): string {
@@ -220,6 +229,21 @@ export class Annotations implements AnnotationsSet {
             landmark.position = position
         })
         return landmark
+    }
+
+    // Computes the positions that aren't known (old exports have none, a reload during a computation loses one)
+    // with computePosition (the backend). An answer is dropped if the landmark moved meanwhile: the move computes its own
+    recomputePositions(computePosition: (pose: Pose) => Promise<Position>) {
+        this.coreLandmarks.filter((landmark) => landmark.position == null).forEach((stored) => {
+            // through the reactive landmark, so the views update
+            const landmark = reactive(stored) as Landmark
+            const pose = landmark.pose
+            computePosition(pose).then((position) => {
+                if (landmark.pose === pose) {
+                    landmark.position = position
+                }
+            }).catch((error) => console.error("Position not computed:", error))
+        })
     }
 
     distanceOf(landmark: Landmark | string): Distance | undefined {
@@ -434,7 +458,8 @@ export class Annotations implements AnnotationsSet {
     }
 
     // Adds saved annotations to these ones (import).
-    // Landmarks of old exports have no position: recompute it with the repository.
+    // Landmarks of old exports have no position: recompute it with the repository (recomputePositions).
+    // Only what the file has is read, the rest is kept
     merge(object: Partial<AnnotationsObject>) {
         const used = new Set(this.allLandmarks.map((landmark) => landmark.id))
         const landmarks = (object.landmarks ?? []).map((landmark) => Landmark.fromJSON(landmark))
@@ -454,8 +479,8 @@ export class Annotations implements AnnotationsSet {
         if (typeof object.scale_factor === "number") {
             this.adjustFactor = object.scale_factor
         }
-        const unit = typeof object.scale === "object" ? object.scale?.unit : object.scale
-        if (isScaleUnit(unit)) {
+        const unit = readScaleUnit(object.scale)
+        if (unit) {
             this.scale = unit
         }
     }

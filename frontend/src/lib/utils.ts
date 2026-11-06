@@ -60,6 +60,23 @@ export function isScaleUnit(value: unknown): value is ScaleUnit {
   return typeof value === "string" && (SCALE_UNITS as string[]).includes(value)
 }
 
+// Unit of a saved `scale`, undefined if it can't be read: a unit ("mm"), a factor (its size in `scales`,
+// see SavedScale) or { unit, factor } (the unit first). A factor gives a physical unit, never px:
+// with the core Scale, 1 is mm
+export function readScaleUnit(value: unknown, scales: Record<ScaleUnit, number> = Scale): ScaleUnit | undefined {
+  if (isScaleUnit(value)) {
+    return value
+  }
+  if (typeof value === "number" && isFinite(value) && value > 0) {
+    return SCALE_UNITS.find((unit) => unit != "px" && Math.abs(scales[unit] - value) <= value * 1e-9)
+  }
+  if (typeof value === "object" && value != null) {
+    const { unit, factor } = value as { unit?: unknown, factor?: unknown }
+    return isScaleUnit(unit) ? unit : readScaleUnit(factor, scales)
+  }
+  return undefined
+}
+
 export const ZOOM_MIN = 0.1
 export const ZOOM_MAX = 4
 export const DOT_RADIUS = 4.5

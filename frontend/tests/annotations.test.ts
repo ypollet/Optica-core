@@ -3,7 +3,8 @@ import { effectScope, isReactive, nextTick, reactive, shallowRef, watchEffect } 
 import Color from "color"
 import {
   Acquisition, Annotations, BoundingBox, DequeMax2, Distance, Landmark, Polygon, Project, usePersistedAnnotations,
-  usePersistedView,
+  usePersistedView, readScaleUnit,
+  type LandmarkObject,
   type ProjectImage,
 } from "../src"
 
@@ -154,7 +155,7 @@ describe("usePersistedAnnotations", () => {
     // first visit
     const current = shallowRef<Project | null>(null)
     const scope = effectScope()
-    scope.run(() => usePersistedAnnotations(() => current.value, storage))
+    scope.run(() => usePersistedAnnotations(() => current.value, { storage }))
     current.value = reactive(new Project("A1", [acquisition("rotation")])) as Project
     await nextTick()
     const annotations = current.value.acquisition!.annotations
@@ -170,11 +171,14 @@ describe("usePersistedAnnotations", () => {
     // reload: a new project comes from the backend with empty annotations
     const reloaded = shallowRef<Project | null>(null)
     const scope2 = effectScope()
-    scope2.run(() => usePersistedAnnotations(() => reloaded.value, storage))
+    let restoredCalls = 0
+    scope2.run(() => usePersistedAnnotations(() => reloaded.value, { storage, onRestored: () => restoredCalls++ }))
     reloaded.value = reactive(new Project("A1", [acquisition("rotation")])) as Project
     await nextTick()
     const restored = reloaded.value.acquisition!.annotations
     expect(restored.landmarks.map((l) => l.id)).toEqual(["kept"])
+    // told once the annotations are back (to recompute the lost positions)
+    expect(restoredCalls).toBe(1)
     // the sidebar state comes back too, but is not part of the export
     expect([restored.tab, restored.selectedDistanceIndex, restored.distances.length]).toEqual(["distances", 0, 2])
     expect(JSON.stringify(reloaded.value.annotationsToJSON())).not.toContain("selectedDistanceIndex")
@@ -187,7 +191,7 @@ describe("usePersistedAnnotations", () => {
     const storage = new MemoryStorage()
     const current = shallowRef<Project | null>(null)
     const scope = effectScope()
-    scope.run(() => usePersistedAnnotations(() => current.value, storage))
+    scope.run(() => usePersistedAnnotations(() => current.value, { storage }))
     current.value = reactive(new Project("A1", [acquisition("rotation")])) as Project
     await nextTick()
     const annotations = current.value.acquisition!.annotations
@@ -487,5 +491,61 @@ describe("createLandmark", () => {
   it("leaves the position to the caller without computePosition", () => {
     const created = new Annotations().createLandmark({ marker: { x: 3, y: 4 }, image: image("i0") }, null)
     expect(created.position).toBeNull()
+  })
+})
+
+describe("old saves", () => {
+  it("reads the scale as a unit, a factor or { unit, factor }", () => {
+    expect([readScaleUnit("cm"), readScaleUnit(10), readScaleUnit(1), readScaleUnit({ unit: "µm", factor: 0.001 })])
+      .toEqual(["cm", "cm", "mm", "µm"])
+    // the factor when the unit can't be read, nothing when neither can
+    expect([readScaleUnit({ unit: "parsec", factor: 1000 }), readScaleUnit(3), readScaleUnit("parsec"), readScaleUnit(null)])
+      .toEqual(["m", undefined, undefined, undefined])
+    // in another table of sizes (sphaeroptica: m = 1)
+    expect(readScaleUnit(0.001, { px: 1, m: 1, dm: 0.1, cm: 0.01, mm: 0.001, µm: 1e-6, nm: 1e-9 })).toBe("mm")
+  })
+
+  it("reads only what a file has, the rest is kept", () => {
+    const annotations = new Annotations()
+    annotations.merge({ scale_factor: 2, scale: 10, landmarks: [landmark("a").toJSON()] })
+    annotations.merge({ distances: [] })
+    annotations.merge({})
+    expect([annotations.landmarks.length, annotations.distances.length, annotations.adjustFactor, annotations.scale])
+      .toEqual([1, 0, 2, "cm"])
+  })
+
+  it("computes the missing positions again, not the known ones", async () => {
+    const { position, ...old } = landmark("old").toJSON()
+    const annotations = reactive(new Annotations())
+    annotations.merge({ landmarks: [old as LandmarkObject, landmark("known").toJSON()] })
+    expect(annotations.landmarks[0]!.position).toBeNull()
+    const asked: string[] = []
+    annotations.recomputePositions(async (pose) => {
+      asked.push(pose.image.name)
+      return { x: 7, y: 8 }
+    })
+    await nextTick()
+    expect(asked).toEqual(["i0"])
+    expect(annotations.landmarks.map((landmark) => landmark.position)).toEqual([{ x: 7, y: 8 }, position])
+  })
+})
+
+describe("coreLandmarks", () => {
+  it("are the landmarks recomputePositions asks for, even when a subclass adds others", async () => {
+    class WithExtra extends Annotations {
+      extra = [new Landmark("e", "e", { marker: { x: 0, y: 0 }, image: image("i0") }, null)]
+      get allLandmarks() {
+        return [...super.allLandmarks, ...this.extra]
+      }
+    }
+    const annotations = new WithExtra()
+    annotations.landmarks.push(new Landmark("p", "p", { marker: { x: 0, y: 0 }, image: image("i0") }, null))
+    const asked: number[] = []
+    annotations.recomputePositions(async () => {
+      asked.push(1)
+      return { x: 0, y: 0 }
+    })
+    await nextTick()
+    expect([asked.length, annotations.allLandmarks.length, annotations.coreLandmarks.length]).toEqual([1, 2, 1])
   })
 })

@@ -44,8 +44,9 @@ export class Landmark {
         return this.id == other.id
     }
 
+    // the position may be missing from old exports: null, to be recomputed (Annotations.recomputePositions)
     static fromJSON(landmark : LandmarkObject){
-        return new Landmark(landmark.id, landmark.label, landmark.pose, landmark.position, Color(landmark.color))
+        return new Landmark(landmark.id, landmark.label, landmark.pose, landmark.position ?? null, Color(landmark.color))
     }
 
     toJSON() : LandmarkObject {

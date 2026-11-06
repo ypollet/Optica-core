@@ -170,7 +170,8 @@ export class Project<TImage extends ProjectImage = ProjectImage, TAcquisition ex
     }
 
     // Reads annotationsToJSON(), or the annotations of a single acquisition (exports made before
-    // the acquisitions) which go to the selected one. replace: restore instead of adding.
+    // the acquisitions, told by their "landmarks" or "distances") which go to the selected one.
+    // replace: restore instead of adding.
     importAnnotations(object: Record<string, object> | object, replace: boolean = false) {
         const apply = (acquisition: TAcquisition | undefined, annotations: object) => {
             if (replace) {

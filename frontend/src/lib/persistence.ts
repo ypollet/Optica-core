@@ -11,7 +11,10 @@ type SavedAnnotations = {
 // (any AnnotationsSet: the core Annotations or an app's own).
 // The project itself is loaded again from the backend: only the annotations are saved.
 // Call it in a component setup, `project` returns the project of the store.
-export function usePersistedAnnotations(project: () => Project<any, any> | null | undefined, storage: Storage = sessionStorage) {
+// onRestored: called once saved annotations are put back (recompute the positions lost by a reload
+// during their computation)
+export function usePersistedAnnotations(project: () => Project<any, any> | null | undefined,
+    { storage = sessionStorage, onRestored }: { storage?: Storage, onRestored?: () => void } = {}) {
     const key = (objectPath: string) => `annotations:${objectPath}`
 
     // a project was loaded: put its saved annotations back
@@ -31,7 +34,9 @@ export function usePersistedAnnotations(project: () => Project<any, any> | null 
             })
         } catch (error) {
             console.error("Saved annotations ignored:", error)
+            return
         }
+        onRestored?.()
     }, { immediate: true })
 
     // Watches what is saved, serialized: only a change of it writes the storage, not the
