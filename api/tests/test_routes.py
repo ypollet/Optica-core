@@ -1,23 +1,32 @@
 import json
+import math
 
 import pytest
 
-from optica_core import Dataset, create_app
+from optica_core import MANIFEST_FORMAT, MANIFEST_VERSION, Dataset, ManifestError, create_app
+
+
+def stack_manifest(**envelope):
+    return {
+        "format": MANIFEST_FORMAT, "version": MANIFEST_VERSION, "viewer": "stackoptica", "unit": "mm",
+        "thumbnails": "thumbnails",
+        "acquisitions": [{"id": "stack", "size": {"width": 4, "height": 2}, "pixelSize": [2, 3],
+                          "images": [{"file": "img.png", "z": 0}]}],
+        **envelope,
+    }
 
 
 class StackDataset(Dataset):
     manifest = "stack.json"
+    viewer = "stackoptica"
 
     def images(self, id):
-        stack_file = self.load(id)
-        return {"stackImages": [{"name": n, "label": n} for n in stack_file["stack"]]}
+        manifest = self.load(id)
+        return {"stackImages": [{"name": i["file"], "label": i["file"]} for i in manifest["acquisitions"][0]["images"]]}
 
     def position(self, id, image_id, x, y):
-        image_data = self.load(id)["stack"][image_id]
-        return {
-            "x": x * image_data["PixelRatio"][0],
-            "y": y * image_data["PixelRatio"][1],
-        }
+        pixel_size = self.pixel_size(*self.find_image(self.load(id), image_id))
+        return {"x": x * pixel_size[0], "y": y * pixel_size[1]}
 
 
 class NoPositionDataset(StackDataset):
@@ -30,7 +39,7 @@ def data_folder(tmp_path):
     (obj / "thumbnails").mkdir(parents=True)
     (obj / "img.png").write_bytes(b"full")
     (obj / "thumbnails" / "img.png").write_bytes(b"thumb")
-    (obj / "stack.json").write_text(json.dumps({"stack": {"img.png": {"PixelRatio": [2, 3]}}, "thumbnails": "thumbnails"}))
+    (obj / "stack.json").write_text(json.dumps(stack_manifest()))
     templates = tmp_path / "dist"
     templates.mkdir()
     (templates / "index.html").write_text("{{ site.logo }} {{ site.version }} {{ owner.name }}")
@@ -85,7 +94,9 @@ def test_thumbnails_folder_from_the_manifest(data_folder):
     for manifest in ({}, {"thumbnails": ""}):
         assert dataset.thumbnails_folder("A1", manifest) is None
         assert not dataset.has_thumbnail(None, "img.png")
-    (data_folder / "A1" / "stack.json").write_text(json.dumps({"stack": {"img.png": {"PixelRatio": [2, 3]}}}))
+    manifest = stack_manifest()
+    del manifest["thumbnails"]
+    (data_folder / "A1" / "stack.json").write_text(json.dumps(manifest))
     assert client(data_folder).get("/A1/img.png/thumbnail").status_code == 404
 
 
@@ -118,13 +129,13 @@ def test_project_payload(data_folder):
 
     class ProjectDataset(StackDataset):
         def images(self, id):
-            stack_file = self.load(id)
+            manifest = self.load(id)
             return project(acquisition(
                 "stack",
                 size={"width": 2000, "height": 1000},
-                images=[image(n, angle=0, hasThumbnail=True) for n in stack_file["stack"]],
+                images=[image(i["file"], angle=0, hasThumbnail=True) for i in manifest["acquisitions"][0]["images"]],
                 standalone_images=[image("result.png", "Result", size={"width": 10, "height": 5})],
-            ))
+            ), unit=manifest["unit"])
 
     res = client(data_folder, ProjectDataset).get("/A1/images")
     assert res.json == {"acquisitions": [{
@@ -132,4 +143,34 @@ def test_project_payload(data_folder):
         "images": [{"name": "img.png", "label": "img.png", "angle": 0, "hasThumbnail": True}],
         "standaloneImages": [{"name": "result.png", "label": "Result", "size": {"width": 10, "height": 5}}],
         "size": {"width": 2000, "height": 1000},
-    }]}
+    }], "unit": "mm"}
+
+
+def test_position_unknown_image(data_folder):
+    assert client(data_folder).get("/A1/nope.png/position?x=1&y=1").status_code == 404
+
+
+def test_image_pixel_size_overrides_the_acquisition(data_folder):
+    manifest = stack_manifest()
+    manifest["acquisitions"][0]["images"].append({"file": "fine.png", "z": 1, "pixelSize": [0.5, 0.25]})
+    (data_folder / "A1" / "stack.json").write_text(json.dumps(manifest))
+    c = client(data_folder)
+    assert c.get("/A1/img.png/position?x=2&y=2").json == {"x": 4.0, "y": 6.0}
+    assert c.get("/A1/fine.png/position?x=2&y=2").json == {"x": 1.0, "y": 0.5}
+
+
+@pytest.mark.parametrize("manifest, message", [
+    # an old manifest, not migrated
+    ({"stack": {"img.png": {"PixelRatio": [2, 3]}}}, "optica_core.migrate"),
+    (stack_manifest(version=2), "version 1"),
+    (stack_manifest(viewer="depthoptica"), "'depthoptica'"),
+])
+def test_manifest_not_in_the_current_format(data_folder, manifest, message):
+    (data_folder / "A1" / "stack.json").write_text(json.dumps(manifest))
+    with pytest.raises(ManifestError, match=message):
+        StackDataset(str(data_folder)).load("A1")
+
+
+@pytest.mark.parametrize("angle_unit, angle, degrees", [("deg", 90, 90), ("rad", math.pi / 2, 90)])
+def test_angles_in_degrees(angle_unit, angle, degrees):
+    assert Dataset.degrees({"angleUnit": angle_unit}, angle) == pytest.approx(degrees)

@@ -27,5 +27,9 @@ def acquisition(
     }
 
 
-def project(*acquisitions: dict) -> dict:
-    return {"acquisitions": list(acquisitions)}
+def project(*acquisitions: dict, unit: str | None = None) -> dict:
+    """`unit`: unit of the physical positions (the "unit" of the manifest), absent when unknown."""
+    data = {"acquisitions": list(acquisitions)}
+    if unit is not None:
+        data["unit"] = unit
+    return data

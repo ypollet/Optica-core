@@ -1,0 +1,275 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "optica-manifest-1.schema.json",
+    "title": "Optica manifest, version 1",
+    "description": "Manifest of an object of an Optica viewer (depth.json, spectral.json, stack.json, rotation.json, calibration.json). See core/MANIFEST.md.",
+    "type": "object",
+    "required": ["format", "version", "viewer", "unit", "acquisitions"],
+    "properties": {
+        "format": { "const": "optica-manifest" },
+        "version": { "const": 1 },
+        "viewer": { "enum": ["depthoptica", "spectraloptica", "stackoptica", "polaroptica", "sphaeroptica"] },
+        "unit": {
+            "description": "Unit of every physical value of the manifest (pixel sizes, heights, z, calibration)",
+            "enum": ["m", "dm", "cm", "mm", "µm", "nm"]
+        },
+        "angleUnit": {
+            "description": "Unit of every angle of the manifest (polaroptica angles, sphaeroptica shortcuts)",
+            "enum": ["deg", "rad"]
+        },
+        "thumbnails": { "description": "Folder of the thumbnails, named like their image", "type": "string", "minLength": 1 },
+        "acquisitions": { "type": "array", "minItems": 1 }
+    },
+    "additionalProperties": false,
+    "allOf": [
+        {
+            "if": { "properties": { "viewer": { "const": "depthoptica" } } },
+            "then": { "properties": { "acquisitions": { "items": { "$ref": "#/$defs/depthAcquisition" } } } }
+        },
+        {
+            "if": { "properties": { "viewer": { "const": "spectraloptica" } } },
+            "then": { "properties": { "acquisitions": { "items": { "$ref": "#/$defs/spectralAcquisition" } } } }
+        },
+        {
+            "if": { "properties": { "viewer": { "const": "stackoptica" } } },
+            "then": { "properties": { "acquisitions": { "items": { "$ref": "#/$defs/stackAcquisition" } } } }
+        },
+        {
+            "if": { "properties": { "viewer": { "const": "polaroptica" } } },
+            "then": {
+                "required": ["angleUnit"],
+                "properties": { "acquisitions": { "items": { "$ref": "#/$defs/rotationAcquisition" } } }
+            }
+        },
+        {
+            "if": { "properties": { "viewer": { "const": "sphaeroptica" } } },
+            "then": {
+                "required": ["angleUnit"],
+                "properties": {
+                    "unit": { "const": "m" },
+                    "acquisitions": { "maxItems": 1, "items": { "$ref": "#/$defs/sphereAcquisition" } }
+                }
+            }
+        }
+    ],
+    "$defs": {
+        "file": { "description": "Path of a file, relative to the folder of the object", "type": "string", "minLength": 1 },
+        "size": {
+            "description": "Size of the images in pixels",
+            "type": "object",
+            "required": ["width", "height"],
+            "properties": {
+                "width": { "type": "integer", "minimum": 1 },
+                "height": { "type": "integer", "minimum": 1 }
+            },
+            "additionalProperties": false
+        },
+        "pixelSize": {
+            "description": "[x, y] size of a pixel in the unit of the manifest",
+            "type": "array",
+            "items": { "type": "number", "exclusiveMinimum": 0 },
+            "minItems": 2,
+            "maxItems": 2
+        },
+        "optionalPixelSize": {
+            "description": "null: the images aren't calibrated, positions are in pixels",
+            "oneOf": [{ "$ref": "#/$defs/pixelSize" }, { "type": "null" }]
+        },
+        "acquisitionBase": {
+            "description": "Fields of every acquisition",
+            "type": "object",
+            "required": ["id", "size", "pixelSize"],
+            "properties": {
+                "id": { "type": "string", "minLength": 1 },
+                "label": { "type": "string" },
+                "size": { "$ref": "#/$defs/size" },
+                "pixelSize": { "$ref": "#/$defs/optionalPixelSize" }
+            }
+        },
+        "imageBase": {
+            "description": "Fields of every image of an images or standaloneImages list",
+            "type": "object",
+            "required": ["file"],
+            "properties": {
+                "file": { "$ref": "#/$defs/file" },
+                "label": { "type": "string" },
+                "pixelSize": { "$ref": "#/$defs/pixelSize", "description": "Overrides the pixel size of the acquisition" }
+            }
+        },
+        "fileRef": {
+            "type": "object",
+            "required": ["file"],
+            "properties": { "file": { "$ref": "#/$defs/file" } },
+            "additionalProperties": false
+        },
+
+        "depthAcquisition": {
+            "description": "One stacked image with its height map. Its id is also the id of its image.",
+            "allOf": [{ "$ref": "#/$defs/acquisitionBase" }],
+            "required": ["image", "heightmap"],
+            "properties": {
+                "id": true, "label": true, "size": true,
+                "pixelSize": { "$ref": "#/$defs/pixelSize" },
+                "image": { "$ref": "#/$defs/fileRef" },
+                "heightmap": {
+                    "description": "Gray image (8 or 16 bits) of the size of the image: 0 is zMin, the highest value of the type is zMax, higher is higher",
+                    "type": "object",
+                    "required": ["file", "zMin", "zMax"],
+                    "properties": {
+                        "file": { "$ref": "#/$defs/file" },
+                        "zMin": { "type": "number" },
+                        "zMax": { "type": "number" }
+                    },
+                    "additionalProperties": false
+                },
+                "mask": { "$ref": "#/$defs/fileRef", "description": "Gray image of the size of the image, 0: outside the object" },
+                "edges": {
+                    "description": "Edge image (Sobel) of the size of the image, the profiles stop where it is above a threshold",
+                    "type": "object",
+                    "required": ["file", "thresholds"],
+                    "properties": {
+                        "file": { "$ref": "#/$defs/file" },
+                        "thresholds": { "type": "object", "additionalProperties": { "type": "number" } }
+                    },
+                    "additionalProperties": false
+                }
+            },
+            "additionalProperties": false
+        },
+
+        "band": {
+            "description": "Wavelength or filter: a type (UV, VIS, IR...) and its range in nm",
+            "type": "object",
+            "properties": {
+                "type": { "type": "string" },
+                "value": { "type": "number" },
+                "bandwidth": { "type": "number" },
+                "min": { "type": ["number", "null"], "description": "null: no lower limit" },
+                "max": { "type": ["number", "null"], "description": "null: no upper limit (long-pass filter)" },
+                "description": { "type": "string" }
+            },
+            "additionalProperties": false
+        },
+        "spectralImage": {
+            "allOf": [{ "$ref": "#/$defs/imageBase" }],
+            "properties": {
+                "wavelength": { "$ref": "#/$defs/band" },
+                "cameraFilter": { "$ref": "#/$defs/band" },
+                "lightFilter": { "$ref": "#/$defs/band" }
+            }
+        },
+        "spectralAcquisition": {
+            "description": "One view: its wavelength series (images) and its images on their own (standaloneImages, with a label)",
+            "allOf": [{ "$ref": "#/$defs/acquisitionBase" }],
+            "properties": {
+                "id": true, "label": true, "size": true, "pixelSize": true,
+                "images": { "type": "array", "items": { "$ref": "#/$defs/spectralImage" } },
+                "standaloneImages": {
+                    "type": "array",
+                    "items": { "allOf": [{ "$ref": "#/$defs/spectralImage" }], "required": ["label"] }
+                }
+            },
+            "additionalProperties": false
+        },
+
+        "stackAcquisition": {
+            "description": "Slices of a focus stack (images, each at its height z) and the images stacked from them (standaloneImages)",
+            "allOf": [{ "$ref": "#/$defs/acquisitionBase" }],
+            "required": ["images"],
+            "properties": {
+                "id": true, "label": true, "size": true, "pixelSize": true,
+                "images": {
+                    "type": "array",
+                    "items": {
+                        "allOf": [{ "$ref": "#/$defs/imageBase" }],
+                        "required": ["z"],
+                        "properties": {
+                            "file": true, "label": true, "pixelSize": true,
+                            "z": { "type": "number" }
+                        },
+                        "additionalProperties": false
+                    }
+                },
+                "standaloneImages": {
+                    "type": "array",
+                    "items": {
+                        "allOf": [{ "$ref": "#/$defs/imageBase" }],
+                        "required": ["label"],
+                        "properties": { "file": true, "label": true, "pixelSize": true },
+                        "additionalProperties": false
+                    }
+                }
+            },
+            "additionalProperties": false
+        },
+
+        "rotationAcquisition": {
+            "description": "Images taken while the polarizers rotate, each at its angle in angleUnit",
+            "allOf": [{ "$ref": "#/$defs/acquisitionBase" }],
+            "required": ["images"],
+            "properties": {
+                "id": true, "label": true, "size": true, "pixelSize": true,
+                "images": {
+                    "type": "array",
+                    "items": {
+                        "allOf": [{ "$ref": "#/$defs/imageBase" }],
+                        "required": ["angle"],
+                        "properties": {
+                            "file": true, "label": true, "pixelSize": true,
+                            "angle": { "type": "number" }
+                        },
+                        "additionalProperties": false
+                    }
+                }
+            },
+            "additionalProperties": false
+        },
+
+        "matrix": {
+            "type": "array",
+            "items": { "type": "array", "items": { "type": "number" } }
+        },
+        "sphereAcquisition": {
+            "description": "Calibrated views around the object; positions come from the calibration, not from a pixel size",
+            "allOf": [{ "$ref": "#/$defs/acquisitionBase" }],
+            "required": ["calibration", "images"],
+            "properties": {
+                "id": true, "label": true, "size": true,
+                "pixelSize": { "type": "null" },
+                "calibration": {
+                    "type": "object",
+                    "required": ["cameraMatrix", "distortion"],
+                    "properties": {
+                        "cameraMatrix": { "$ref": "#/$defs/matrix", "description": "3x3 intrinsic matrix, in pixels", "minItems": 3, "maxItems": 3 },
+                        "distortion": { "description": "OpenCV distortion coefficients (k1, k2, p1, p2, k3)", "type": "array", "items": { "type": "number" } }
+                    },
+                    "additionalProperties": false
+                },
+                "images": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "required": ["file", "extrinsics"],
+                        "properties": {
+                            "file": { "$ref": "#/$defs/file" },
+                            "label": { "type": "string" },
+                            "extrinsics": { "$ref": "#/$defs/matrix", "description": "3x4 [R|t] world -> camera, t in the unit of the manifest", "minItems": 3, "maxItems": 3 }
+                        },
+                        "additionalProperties": false
+                    }
+                },
+                "shortcuts": {
+                    "description": "Named views (FRONT, LEFT, SUPERIOR...) on the sphere, longitude and latitude in angleUnit",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "object",
+                        "required": ["longitude", "latitude"],
+                        "properties": { "longitude": { "type": "number" }, "latitude": { "type": "number" } },
+                        "additionalProperties": false
+                    }
+                }
+            },
+            "additionalProperties": false
+        }
+    }
+}

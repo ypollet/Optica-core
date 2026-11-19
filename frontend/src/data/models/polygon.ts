@@ -1,6 +1,6 @@
 import Color from "color"
 import { Landmark, type LandmarkObject } from "./landmark"
-import { is3D, type Position } from "./coordinates"
+import { fillUnknownZOnPlane, is3D, type Position } from "./coordinates"
 import { sumOfSegments } from "./distance"
 import { randomColorRGB, type ScaleUnit } from "../../lib/utils"
 
@@ -11,12 +11,13 @@ export type PolygonObject = {
 }
 
 // area enclosed by the points in order: shoelace formula in 2D, Newell's method in 3D
-// (the norm of the vector area, exact for a planar polygon). undefined under three points or while a position isn't known
+// (the norm of the vector area, exact for a planar polygon). Unknown z are filled on its plane (fillUnknownZOnPlane).
+// undefined under three points or while a position isn't known
 function enclosedArea(known: (Position | null)[]): number | undefined {
     if (known.length < 3 || known.some((point) => point == null)) {
         return undefined
     }
-    const points = known as Position[]
+    const points = fillUnknownZOnPlane(known as Position[])
     const normal = { x: 0, y: 0, z: 0 }
     points.forEach((current, i) => {
         const next = points[(i + 1) % points.length]!
@@ -26,11 +27,6 @@ function enclosedArea(known: (Position | null)[]): number | undefined {
         normal.z += (current.x - next.x) * (current.y + next.y)
     })
     return Math.sqrt(normal.x ** 2 + normal.y ** 2 + normal.z ** 2) / 2
-}
-
-// the landmarks with the first one again at the end, undefined under three landmarks
-function closed(landmarks: Landmark[]): Landmark[] | undefined {
-    return landmarks.length < 3 ? undefined : [...landmarks, landmarks[0]!]
 }
 
 // Always closed: the last landmark is linked back to the first one. Built like a Distance,
@@ -50,11 +46,10 @@ export class Polygon {
 
     // perimeter in image units: pixels for the "px" scale, physical otherwise. undefined under three landmarks
     perimeter(scale?: ScaleUnit): number | undefined {
-        const loop = closed(this.landmarks)
-        if (loop == undefined) {
+        if (this.landmarks.length < 3) {
             return undefined
         }
-        return sumOfSegments(loop, scale == "px" ? (landmark) => landmark.pose.marker : (landmark) => landmark.position)
+        return sumOfSegments(this.landmarks, scale == "px" ? (landmark) => landmark.pose.marker : (landmark) => landmark.position, true)
     }
 
     // area in squared image units: pixels for the "px" scale, physical otherwise. undefined under three landmarks

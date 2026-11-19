@@ -1,6 +1,6 @@
 import Color from "color"
 import { Landmark, type LandmarkObject } from "./landmark"
-import { distanceVector, type Position } from "./coordinates"
+import { distanceVector, fillUnknownZ, fillUnknownZOnPlane, type Position } from "./coordinates"
 import { computeDistance, randomColorRGB, type ScaleUnit } from "../../lib/utils"
 
 export type DistanceObject = {
@@ -9,14 +9,19 @@ export type DistanceObject = {
     color: string,
 }
 
-// sum of the segments between consecutive landmarks, `point`: where a landmark is.
-// undefined under two landmarks or while a position isn't known
-export function sumOfSegments(landmarks: Landmark[], point: (landmark: Landmark) => Position | null) : number | undefined {
-    const points = landmarks.map(point)
-    if(points.length < 2 || points.some((point) => point == null)){
+// sum of the segments between consecutive landmarks, `point`: where a landmark is, back to the first one when
+// `closed` (a polygon). Unknown z are filled along the path (fillUnknownZ), or on the plane of the polygon
+// (fillUnknownZOnPlane) when closed. undefined under two landmarks or while a position isn't known
+export function sumOfSegments(landmarks: Landmark[], point: (landmark: Landmark) => Position | null, closed = false) : number | undefined {
+    const known = landmarks.map(point)
+    if(known.length < 2 || known.some((point) => point == null)){
         return undefined
     }
-    return computeDistance(points.slice(1).map((current, i) => distanceVector(points[i]!, current!)))
+    const points = closed ? fillUnknownZOnPlane(known as Position[]) : fillUnknownZ(known as Position[])
+    if (closed) {
+        points.push(points[0]!)
+    }
+    return computeDistance(points.slice(1).map((current, i) => distanceVector(points[i]!, current)))
 }
 
 export class Distance {

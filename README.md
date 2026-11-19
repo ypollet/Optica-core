@@ -30,29 +30,28 @@ pip install -e ../core/api
 
 ```python
 # polar/app.py
-import os
-
-from optica_core import Dataset, create_app
+from optica_core import Dataset, acquisition, create_app, image, project
 
 
 class RotationDataset(Dataset):
     manifest = "rotation.json"
+    viewer = "polaroptica"   # load() refuses a manifest of another viewer or an old one
 
     def images(self, id):
-        rotation_file = self.load(id)
-        return {
-            "rotationImages": [
-                {"name": name, "label": name, "angle": round(image["angle"], 2),
-                 # only when the thumbnail file exists
-                 "hasThumbnail": os.path.isfile(os.path.join(*self.thumbnail(id, name)))}
-                for name, image in rotation_file["rotation"].items()
-            ],
-            "size": {"height": rotation_file["height"], "width": rotation_file["width"]},
-        }
+        manifest = self.load(id)
+        folder = self.thumbnails_folder(id, manifest)
+        return project(*[
+            acquisition(rotation["id"], size=rotation["size"], images=[
+                image(entry["file"], angle=entry["angle"], hasThumbnail=self.has_thumbnail(folder, entry["file"]))
+                for entry in rotation["images"]
+            ])
+            for rotation in manifest["acquisitions"]
+        ], unit=manifest["unit"])
 
     def position(self, id, image_id, x, y):
-        pixel_ratio = self.load(id)["PixelRatio"]
-        return {"x": x * pixel_ratio[0], "y": y * pixel_ratio[1]}
+        # the image's pixel size, else its acquisition's (None: not calibrated)
+        pixel_size = self.pixel_size(*self.find_image(self.load(id), image_id)) or [1, 1]
+        return {"x": x * pixel_size[0], "y": y * pixel_size[1]}
 
 
 app = create_app(RotationDataset, logo="Polaroptica", version="1.0.0")
@@ -61,7 +60,9 @@ if __name__ == "__main__":
     app.run()
 ```
 
-Override `full_image` / `thumbnail` when files aren't at `<id>/<image>` and `<id>/thumbnails/<image>` (depth maps ids through `depth.json`, sphaer reads the thumbnail folder from `calibration.json`). An unimplemented `position` answers 404.
+The manifests follow one format for every viewer, see [MANIFEST.md](MANIFEST.md).
+
+Override `full_image` / `thumbnail` when files aren't at `<id>/<image>` and `<id>/thumbnails/<image>` (depth maps the ids of its acquisitions to their image file). An unimplemented `position` answers 404.
 
 The data folder is `$OPTICA_DATA_FOLDER`, else `<cwd>/data`, or `create_app(..., data_folder=...)`.
 

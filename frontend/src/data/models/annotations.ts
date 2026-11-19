@@ -2,7 +2,7 @@ import type Color from "color"
 import { round } from "mathjs"
 import { reactive } from "vue"
 import { adjustFactorFor, randomID, readScaleUnit, ROUNDING, Scale, type ScaleUnit } from "../../lib/utils"
-import { is3D, type Coordinates, type Position } from "./coordinates"
+import { hasUnknownZ, is3D, type Coordinates, type Position } from "./coordinates"
 import { Distance, type DistanceObject } from "./distance"
 import { Landmark, type LandmarkObject, type Pose } from "./landmark"
 import { Polygon, type PolygonObject } from "./polygon"
@@ -405,7 +405,10 @@ export class Annotations implements AnnotationsSet {
         }
         const x = this.inScale(position.x)
         const y = this.inScale(position.y)
-        return is3D(position) ? { x, y, z: this.inScale(position.z) } : { x, y }
+        if (is3D(position)) {
+            return { x, y, z: this.inScale(position.z) }
+        }
+        return hasUnknownZ(position) ? { x, y, z: null } : { x, y }
     }
 
     // the columns of SCALED_POSITION_CSV_HEADER
