@@ -5,9 +5,6 @@ import pytest
 
 from optica_core.migrate import MigrationError, main, migrate, migrate_file
 
-SCHEMA = os.path.join(os.path.dirname(__file__), "..", "optica_core", "manifest.schema.json")
-
-
 def envelope(viewer, unit="mm", thumbnails="thumbnails", angle_unit=None):
     data = {"format": "optica-manifest", "version": 1, "viewer": viewer, "unit": unit}
     if angle_unit:
@@ -175,11 +172,11 @@ def test_unknown_keys_are_reported():
     ("depth.json", OLD_DEPTH), ("spectral.json", OLD_SPECTRAL), ("stack.json", OLD_STACK),
     ("rotation.json", OLD_ROTATION), ("calibration.json", OLD_CALIBRATION),
 ])
-def test_migrated_manifests_follow_the_schema(filename, old):
-    jsonschema = pytest.importorskip("jsonschema")
-    with open(SCHEMA) as f:
-        schema = json.load(f)
-    jsonschema.validate(migrate(filename, old)[0], schema, cls=jsonschema.Draft202012Validator)
+def test_migrated_manifests_follow_the_common_schema(filename, old):
+    # each viewer checks its own fields against its own schema
+    pytest.importorskip("jsonschema")
+    from optica_core.schema import errors, validator
+    assert errors(validator(), migrate(filename, old)[0]) == []
 
 
 def test_migrate_file_keeps_the_old_one(tmp_path):
@@ -205,14 +202,3 @@ def test_migrate_file_never_overwrites_a_backup(tmp_path):
     assert main([str(path)]) == 1
     assert json.loads(path.read_text()) == OLD_ROTATION
     assert (tmp_path / "rotation.v0.json").read_text() == "{}"
-
-
-@pytest.mark.parametrize("filename, old", [("rotation.json", OLD_ROTATION), ("calibration.json", OLD_CALIBRATION)])
-def test_the_schema_requires_the_angle_unit(filename, old):
-    jsonschema = pytest.importorskip("jsonschema")
-    with open(SCHEMA) as f:
-        schema = json.load(f)
-    new = migrate(filename, old)[0]
-    del new["angleUnit"]
-    with pytest.raises(jsonschema.ValidationError, match="angleUnit"):
-        jsonschema.validate(new, schema, cls=jsonschema.Draft202012Validator)

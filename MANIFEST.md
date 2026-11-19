@@ -1,16 +1,8 @@
 # Optica manifest, version 1
 
-Each object of a viewer is a folder in its data folder, with one JSON manifest describing its images:
+Each object of a viewer is a folder in its data folder, with one JSON manifest describing its images (`depth.json` for depthoptica, for example). Every manifest has the common part described here; each viewer adds its own fields and documents them in its `MANIFEST.md`, next to its `manifest.schema.json`.
 
-| Viewer         | Manifest           | `unit` |
-| -------------- | ------------------ | ------ |
-| depthoptica    | `depth.json`       | `mm`   |
-| spectraloptica | `spectral.json`    | `mm`   |
-| stackoptica    | `stack.json`       | `mm`   |
-| polaroptica    | `rotation.json`    | `mm`   |
-| sphaeroptica   | `calibration.json` | `m`    |
-
-The JSON Schema is [`api/optica_core/manifest.schema.json`](api/optica_core/manifest.schema.json). Keys are camelCase. File paths are relative to the folder of the object.
+Keys are camelCase. File paths are relative to the folder of the object.
 
 ## Envelope
 
@@ -20,13 +12,13 @@ The JSON Schema is [`api/optica_core/manifest.schema.json`](api/optica_core/mani
   "version": 1,
   "viewer": "depthoptica",       // which viewer reads it
   "unit": "mm",                  // unit of every physical value below: m, dm, cm, mm, µm, nm (the Scale names)
-  "angleUnit": "deg",            // unit of every angle below: deg or rad; required by polaroptica and sphaeroptica
+  "angleUnit": "deg",            // unit of every angle below: deg or rad; a viewer with angles requires it
   "thumbnails": "thumbnails",    // optional: folder of the thumbnails, named like their image
   "acquisitions": [ ... ]        // at least one
 }
 ```
 
-The API always sends angles in degrees, whatever `angleUnit` is. The `/<id>/images` payload sends `unit` with the acquisitions. The frontend can then convert with `Scale[unit]` instead of assuming mm, or m for sphaeroptica.
+The API always sends angles in degrees, whatever `angleUnit` is. The `/<id>/images` payload sends `unit` with the acquisitions. The frontend can then convert with `Scale[unit]` instead of assuming a unit.
 
 ## Acquisition
 
@@ -47,75 +39,22 @@ An image of `images` or `standaloneImages` has a `file`, an optional `label` (de
 
 When `pixelSize` is `null`, positions are returned in pixels.
 
-Each viewer adds its own fields:
+## Schemas
 
-### depthoptica
+A new viewer adds a `manifest.schema.json` and a `MANIFEST.md` next to its app; nothing changes in core.
 
-An acquisition is one stacked image and its height map. Its `id` is also the id of the image in the API.
+The common part is [`api/optica_core/manifest.schema.json`](api/optica_core/manifest.schema.json): the envelope, and the fields of every acquisition and image. It leaves acquisitions and images open.
 
-```jsonc
-{
-  "id": "x25", "size": { ... }, "pixelSize": [0.0117, 0.0185],   // pixelSize is required
-  "image":     { "file": "x25_color.png" },
-  "heightmap": { "file": "x25_depth.png", "zMin": -5.938, "zMax": 0 },
-  "mask":      { "file": "x25_mask.png" },                                     // optional
-  "edges":     { "file": "x25_sobel.png", "thresholds": { "light": 5, "strong": 25 } }  // optional
-}
-```
+Each viewer has its own `<viewer>/manifest.schema.json`. It refers to the common one (`urn:optica:manifest:1`), adds its fields and closes its acquisitions and images with `unevaluatedProperties: false`, so an unknown or misspelled key is refused.
 
-- **heightmap**: a gray image (8 or 16 bits) of the size of the image. Value 0 is `zMin` and the highest value of the type (255 or 65535) is `zMax`, linearly in between. A higher value is a higher point. Z is in the frame of the scanner, so it can be negative.
-- **mask**: same size, 0 outside the object. The height profiles skip masked pixels.
-- **edges**: same size. A profile is cut where an edge is above the chosen threshold. Thresholds are per image; their names are what the viewer offers.
-
-### spectraloptica
-
-An acquisition is a view of the object. `images` is its wavelength series (the viewer sorts it by `wavelength.value`). `standaloneImages` are images on their own, and each needs a `label`.
-
-```jsonc
-{
-  "file": "UV_365.jpg", "label": "UV",
-  "wavelength":   { "type": "UV", "value": 365, "bandwidth": 10 },
-  "cameraFilter": { "type": "UV", "description": "ZWB2" },
-  "lightFilter":  { "type": "IR", "min": 720, "max": null }
-}
-```
-
-A band has `type` (UV, VIS, IR…) and optional `value`, `bandwidth`, `min`, `max` (nm, `null`: no limit) and `description`.
-
-### stackoptica
-
-`images` are the slices, each at its height `z` in `unit`. `standaloneImages` are the images stacked from them, labelled by their method. The pixel size of the acquisition applies to every slice; a slice gives its own `pixelSize` if the magnification changed.
-
-```jsonc
-"images": [{ "file": "Plane000.jpg", "z": 0 }, { "file": "Plane001.jpg", "z": 0.002 }],
-"standaloneImages": [{ "file": "dorsal.jpg", "label": "Dorsal" }]
-```
-
-### polaroptica
-
-`images` are the images taken while the polarizers rotate, each at its `angle` in `angleUnit`.
-
-```jsonc
-"images": [{ "file": "isrnbel001_r1_ppl01.jpg", "angle": 0 }, { "file": "isrnbel001_r1_ppl02.jpg", "angle": 5 }]
-```
-
-### sphaeroptica
-
-There is one acquisition, the views around the object. `unit` is `m`, and `pixelSize` is `null` because positions come from the calibration.
-
-```jsonc
-{
-  "id": "sphere", "size": { "width": 5472, "height": 3648 }, "pixelSize": null,
-  "calibration": {
-    "cameraMatrix": [[fx, 0, cx], [0, fy, cy], [0, 0, 1]],   // pixels
-    "distortion": [k1, k2, p1, p2, k3]                       // OpenCV
-  },
-  "images": [{ "file": "_x_00000_y_00000_.jpg", "extrinsics": [[r11, r12, r13, tx], [...], [...]] }],  // [R|t] world -> camera
-  "shortcuts": { "FRONT": { "longitude": 0, "latitude": 0 } }   // optional, in angleUnit
-}
+```bash
+pip install -e 'core/api[test]'    # jsonschema, only to check manifests
+python -m optica_core.schema depthoptica/manifest.schema.json depthoptica/data/*/depth.json
 ```
 
 ## Migrating old manifests
+
+A one-off step for the manifests written before version 1, frozen: it only knows the five formats of that time (`depth.json`, `spectral.json`, `stack.json`, `rotation.json`, `calibration.json`), a new viewer starts with version 1 and has nothing to migrate.
 
 ```bash
 python -m optica_core.migrate --dry-run <data folder>...   # show what would change

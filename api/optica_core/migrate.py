@@ -1,4 +1,7 @@
-"""Convert the old manifests of the viewers to the current format (core/MANIFEST.md).
+"""Convert the manifests written before version 1 to the current format (core/MANIFEST.md).
+
+A frozen, one-off step: it only knows the five formats of that time. A new viewer starts with
+version 1 and adds nothing here.
 
     python -m optica_core.migrate [--dry-run] <data folder or manifest>...
 

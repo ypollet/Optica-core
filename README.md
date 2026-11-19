@@ -1,6 +1,6 @@
 # Optica core
 
-Code shared by the five Optica viewers (`depth`, `polar`, `spectral`, `sphaer`, `stack`).
+Code shared by the Optica viewers. Each viewer is an app of its own that depends on this package; core knows none of them, the examples below take one or the other.
 
 ```
 core/
@@ -20,7 +20,7 @@ Every backend serves these routes; the frontend data layer (`src/data/providers/
 | `GET /<id>/<image>/thumbnail`   | thumbnail file, `Dataset.thumbnail()`          |
 | `GET /<id>/<image>/position?x&y`| physical position, `Dataset.position()`        |
 
-App-specific routes stay in each app and are added on the app returned by `create_app` (see `depth-core/app.py`). On the frontend, `provider.imageUrl(objectPath, image, "profile")` gives the url of a route about one image for both providers (WEB: `<id>/<image>/profile`, Orthanc: `/<plugin>/<image>/profile`). The ids are encoded (`segment`), an app building its own routes on `url(route)` encodes them too.
+App-specific routes stay in each app and are added on the app returned by `create_app` (depthoptica adds `/<id>/<image>/profile` this way). On the frontend, `provider.imageUrl(objectPath, image, "profile")` gives the url of a route about one image for both providers (WEB: `<id>/<image>/profile`, Orthanc: `/<plugin>/<image>/profile`). The ids are encoded (`segment`), an app building its own routes on `url(route)` encodes them too.
 
 ### Backend usage
 
@@ -117,7 +117,7 @@ A `Project` (an object) has one or many `Acquisition`s. An acquisition holds the
 
 | App | Acquisitions | `images` | `standaloneImages` |
 | --- | --- | --- | --- |
-| stack | 1 | the stack, by slice | the stacked results (`individualImages`) |
+| stack | 1 | the stack, by slice | the stacked results |
 | polar | 1 | the rotation, by angle | — |
 | spectral | one per view | images ordered by the wavelength of the light | specific images (like "White" or "VIL") |
 | sphaer | 1 | the sphere of views | — |
@@ -136,23 +136,20 @@ App images extend `ProjectImage` (`RotationImage = ProjectImage & { angle: numbe
 The backend returns the standard payload with the helpers of `optica_core`:
 
 ```python
-import os
-
 from optica_core import acquisition, image, project
 
 def images(self, id):
-    stack_file = self.load(id)
-
-    # the url of a thumbnail is only given to the images whose thumbnail file exists
-    def has_thumbnail(name):
-        return os.path.isfile(os.path.join(*self.thumbnail(id, name)))
+    manifest = self.load(id)
+    # the thumbnail is only given to the images whose thumbnail file exists
+    folder = self.thumbnails_folder(id, manifest)
+    stack = manifest["acquisitions"][0]
 
     return project(acquisition(
-        "stack", size={"width": stack_file["width"], "height": stack_file["height"]},
-        images=[image(name, hasThumbnail=has_thumbnail(name)) for name in stack_file["stack"]],
-        standalone_images=[image(name, label, hasThumbnail=has_thumbnail(name))
-                           for label, name in stack_file["Stacked_images"].items()],
-    ))
+        stack["id"], size=stack["size"],
+        images=[image(entry["file"], hasThumbnail=self.has_thumbnail(folder, entry["file"])) for entry in stack["images"]],
+        standalone_images=[image(entry["file"], entry["label"], hasThumbnail=self.has_thumbnail(folder, entry["file"]))
+                           for entry in stack.get("standaloneImages", [])],
+    ), unit=manifest["unit"])
 ```
 
 `ProjectRepository` reads it as is. Until a backend is migrated, pass a parser for its old payload: `new ProjectRepository(provider, (data) => [{ id: "rotation", images: data.rotationImages, size: data.size }])` (see `frontend/tests/project.test.ts` for spectral and depth).
