@@ -4,6 +4,8 @@ import os
 
 from flask import abort
 
+from optica_core.schema import duplicates
+
 # envelope of every manifest, see core/MANIFEST.md
 MANIFEST_FORMAT = "optica-manifest"
 MANIFEST_VERSION = 1
@@ -50,6 +52,10 @@ class Dataset:
                                 "convert it with `python -m optica_core.migrate`")
         if manifest.get("viewer") != self.viewer:
             raise ManifestError(f"{path}: manifest of {manifest.get('viewer')!r}, not of {self.viewer!r}")
+        # the routes find acquisitions and images by id: a second one would never be reached
+        found = duplicates(manifest)
+        if found:
+            raise ManifestError(f"{path}: {'; '.join(found)}")
 
     # the acquisition `acquisition_id`, 404 when there is none
     @staticmethod

@@ -3,6 +3,7 @@ export * from "./lib/export"
 export * from "./lib/persistence"
 export * from "./lib/annotationsFile"
 export * from "./lib/saved"
+export * from "./lib/url"
 export * from "./lib/interaction"
 export * from "./config/appSettings"
 

@@ -47,6 +47,8 @@ The common part is [`api/optica_core/manifest.schema.json`](api/optica_core/mani
 
 Each viewer has its own `<viewer>/manifest.schema.json`. It refers to the common one (`urn:optica:manifest:1`), adds its fields and closes its acquisitions and images with `unevaluatedProperties: false`, so an unknown or misspelled key is refused.
 
+A schema can't tell that an id is used twice, so `optica_core.schema` and the apps (when they load a manifest) also check that acquisition ids and image file names are unique in the manifest.
+
 ```bash
 pip install -e 'core/api[test]'    # jsonschema, only to check manifests
 python -m optica_core.schema depthoptica/manifest.schema.json depthoptica/data/*/depth.json

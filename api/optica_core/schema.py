@@ -28,9 +28,34 @@ def validator(viewer_schema: str | None = None):
     return Draft202012Validator(schema, registry=registry)
 
 
+def duplicates(manifest: dict) -> list[str]:
+    """The ids a manifest has twice, which a schema can't tell: acquisition ids, and image file names
+    (the id of an image in the routes) across all its acquisitions."""
+    found = []
+    acquisitions = [a for a in manifest.get("acquisitions", []) if isinstance(a, dict)] \
+        if isinstance(manifest.get("acquisitions"), list) else []
+    seen = set()
+    for acquisition in acquisitions:
+        if acquisition.get("id") in seen:
+            found.append(f"acquisitions: id {acquisition['id']!r} twice")
+        seen.add(acquisition.get("id"))
+    seen = set()
+    for acquisition in acquisitions:
+        for key in ("images", "standaloneImages"):
+            images = acquisition.get(key)
+            for image in images if isinstance(images, list) else []:
+                file = image.get("file") if isinstance(image, dict) else None
+                if file in seen:
+                    found.append(f"acquisitions/{acquisition.get('id')}/{key}: file {file!r} twice in the manifest")
+                if file is not None:
+                    seen.add(file)
+    return found
+
+
 def errors(validator, manifest: dict) -> list[str]:
-    return [f"{'/'.join(map(str, error.absolute_path)) or '(root)'}: {error.message}"
-            for error in sorted(validator.iter_errors(manifest), key=lambda error: list(map(str, error.absolute_path)))]
+    found = [f"{'/'.join(map(str, error.absolute_path)) or '(root)'}: {error.message}"
+             for error in sorted(validator.iter_errors(manifest), key=lambda error: list(map(str, error.absolute_path)))]
+    return found + duplicates(manifest)
 
 
 def main(argv: list[str] | None = None) -> int:

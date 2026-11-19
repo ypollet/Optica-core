@@ -171,6 +171,22 @@ def test_manifest_not_in_the_current_format(data_folder, manifest, message):
         SampleDataset(str(data_folder)).load("A1")
 
 
+def twice(manifest, where):
+    if where == "acquisition":
+        manifest["acquisitions"].append({**manifest["acquisitions"][0], "images": [], "standaloneImages": []})
+    else:
+        # the same file in a second acquisition: image ids are unique in the whole manifest
+        manifest["acquisitions"].append({**manifest["acquisitions"][0], "id": "other", "standaloneImages": []})
+    return manifest
+
+
+@pytest.mark.parametrize("where, message", [("acquisition", "id 'main' twice"), ("image", "file 'img.png' twice")])
+def test_duplicate_ids(data_folder, where, message):
+    (data_folder / "A1" / "sample.json").write_text(json.dumps(twice(sample_manifest(), where)))
+    with pytest.raises(ManifestError, match=message):
+        SampleDataset(str(data_folder)).load("A1")
+
+
 @pytest.mark.parametrize("angle_unit, angle, degrees", [("deg", 90, 90), ("rad", math.pi / 2, 90)])
 def test_angles_in_degrees(angle_unit, angle, degrees):
     assert Dataset.degrees({"angleUnit": angle_unit}, angle) == pytest.approx(degrees)

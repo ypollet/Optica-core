@@ -3,7 +3,7 @@ import { ref, shallowRef } from "vue"
 import { PhSpinnerGap } from "@phosphor-icons/vue"
 
 // Spinner / error / content around the loading of a project (the old CameraViewer wrappers).
-// Loaded once: the apps read the object from the url at startup (?series=) and keep it for the session.
+// Loaded once: the apps read the object from the url at startup (?object=, objectFromUrl) and keep it for the session.
 // An app switching objects without reloading the page remounts it (:key="objectPath").
 const props = defineProps<{
   load: () => Promise<T>
