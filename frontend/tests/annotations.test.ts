@@ -3,7 +3,7 @@ import { effectScope, isReactive, nextTick, reactive, shallowRef, watchEffect } 
 import Color from "color"
 import {
   Acquisition, Annotations, BoundingBox, DequeMax2, Distance, Landmark, Polygon, Project, usePersistedAnnotations,
-  usePersistedView, readScaleUnit,
+  usePersistedView, readScaleUnit, annotationsFile, readAnnotationsFile, ANNOTATIONS_FORMAT,
   type LandmarkObject,
   type ProjectImage,
 } from "../src"
@@ -58,12 +58,13 @@ describe("Annotations", () => {
     annotations.scale = "mm"
     const saved = JSON.parse(JSON.stringify(annotations.toJSON()))
     expect(saved.scale).toEqual({ unit: "mm", factor: 1 })
-    // landmark(): marker (1, 2), position (10, 20); positions × scale_factor 2 in mm, the markers in px
-    expect(saved.landmarks[0].scaled_position).toEqual({ x: 20, y: 40 })
-    expect(saved.distances[0].landmarks[0].scaled_position).toEqual({ x: 20, y: 40 })
+    expect(saved.scaleFactor).toBe(2)
+    // landmark(): marker (1, 2), position (10, 20); positions × scaleFactor 2 in mm, the markers in px
+    expect(saved.landmarks[0].scaledPosition).toEqual({ x: 20, y: 40 })
+    expect(saved.distances[0].landmarks[0].scaledPosition).toEqual({ x: 20, y: 40 })
     expect(annotations.toCSVRows()[0].slice(-4)).toEqual(["20.00000", "40.00000", "", "mm"])
     annotations.scale = "px"
-    expect(annotations.toJSON().landmarks[0]).toMatchObject({ scaled_position: { x: 1, y: 2 } })
+    expect(annotations.toJSON().landmarks[0]).toMatchObject({ scaledPosition: { x: 1, y: 2 } })
 
     const other = new Annotations()
     other.merge(saved)
@@ -78,11 +79,8 @@ describe("Annotations", () => {
     other.removeLandmark("a")
     expect(other.landmarks.length).toBe(1)
 
-    other.restore({ ...saved, scale: "parsec" })
+    other.restore({ ...saved, scale: { unit: "parsec", factor: 1 } })
     expect([other.landmarks.length, other.distances.length, other.scale]).toEqual([1, 1, "mm"])
-    // the saves before SavedScale have only the unit
-    other.restore({ ...saved, scale: "cm" })
-    expect(other.scale).toBe("cm")
   })
 })
 
@@ -105,24 +103,35 @@ describe("Project annotations", () => {
     expect(a.annotations.distances[0]).toBeInstanceOf(Distance)
   })
 
-  it("exports by acquisition and imports both formats", () => {
+  it("exports a file by acquisition and imports it", () => {
     const project = new Project("A1", [acquisition("VIS"), acquisition("UV")])
     project.acquisitions[1].annotations.landmarks.push(landmark("u"))
-    const exported = JSON.parse(JSON.stringify(project.annotationsToJSON()))
-    expect(Object.keys(exported)).toEqual(["VIS", "UV"])
+    const exported = JSON.parse(JSON.stringify(annotationsFile(project, "spectraloptica")))
+    expect(exported).toMatchObject({ format: ANNOTATIONS_FORMAT, version: 1, viewer: "spectraloptica", object: "A1" })
+    expect(Object.keys(exported.acquisitions)).toEqual(["VIS", "UV"])
 
     const copy = new Project("A1", [acquisition("VIS"), acquisition("UV")])
-    copy.importAnnotations(exported)
+    copy.importAnnotationsFile(exported, { viewer: "spectraloptica" })
     expect(copy.getAcquisition("UV")!.annotations.landmarks.map((l) => l.id)).toEqual(["u"])
 
-    // single acquisition export (first polar files): goes to the selected acquisition
+    copy.importAnnotationsFile(exported, { viewer: "spectraloptica", replace: true })
+    expect(copy.getAcquisition("VIS")!.annotations.landmarks).toEqual([])
+
+    // the file of another viewer is refused (a newer version is read, see "tolerant import")
+    expect(() => copy.importAnnotationsFile(exported, { viewer: "depthoptica" })).toThrow("spectraloptica")
+  })
+
+  it("upgrades the exports made before the format", () => {
+    const copy = new Project("A1", [acquisition("VIS"), acquisition("UV")])
+    // by acquisition, with scale_factor and the scale as a unit
+    copy.importAnnotationsFile({ UV: { scale_factor: 2, scale: "cm", landmarks: [landmark("u").toJSON()] } })
+    expect([copy.getAcquisition("UV")!.annotations.adjustFactor, copy.getAcquisition("UV")!.annotations.scale]).toEqual([2, "cm"])
+
+    // a single set (first polar files): goes to the selected acquisition
     copy.selectAcquisition("VIS")
-    copy.importAnnotations({ scale_factor: 3, landmarks: [landmark("old").toJSON()], distances: [] })
+    copy.importAnnotationsFile({ scale_factor: 3, landmarks: [landmark("old").toJSON()], distances: [] })
     expect(copy.getAcquisition("VIS")!.annotations.landmarks.map((l) => l.id)).toEqual(["old"])
     expect(copy.getAcquisition("VIS")!.annotations.adjustFactor).toBe(3)
-
-    copy.importAnnotations(exported, true)
-    expect(copy.getAcquisition("VIS")!.annotations.landmarks).toEqual([])
   })
 
   it("writes CSV rows with the acquisition", () => {
@@ -185,6 +194,21 @@ describe("usePersistedAnnotations", () => {
     await nextTick()
     expect(storage.getItem("annotations:A1")).toContain("kept")
     scope2.stop()
+  })
+
+  it("puts back what an older version of the viewer saved", async () => {
+    const storage = new MemoryStorage()
+    storage.setItem("annotations:A1", JSON.stringify({ annotations: { rotation: { scale_factor: 4, landmarks: [landmark("old").toJSON()] } } }))
+    const loaded = shallowRef<Project | null>(null)
+    const scope = effectScope()
+    scope.run(() => usePersistedAnnotations(() => loaded.value, { storage }))
+    loaded.value = reactive(new Project("A1", [acquisition("rotation")])) as Project
+    await nextTick()
+    const restored = loaded.value.acquisition!.annotations
+    expect([restored.landmarks.map((l) => l.id), restored.adjustFactor]).toEqual([["old"], 4])
+    await nextTick()
+    expect(JSON.parse(storage.getItem("annotations:A1")!).annotations.format).toBe(ANNOTATIONS_FORMAT)
+    scope.stop()
   })
 
   it("doesn't write the storage for what isn't saved", async () => {
@@ -495,6 +519,17 @@ describe("createLandmark", () => {
 })
 
 describe("old saves", () => {
+  it("are upgraded by readAnnotationsFile only", () => {
+    expect(readAnnotationsFile({ A: { scale_factor: 2, scale: 10, landmarks: [] } }))
+      .toEqual({ A: { scaleFactor: 2, scale: { unit: "cm", factor: 10 }, landmarks: [] } })
+    // a single set without an acquisition to go to: nothing
+    expect(readAnnotationsFile({ landmarks: [] })).toEqual({})
+    expect(() => readAnnotationsFile("text")).toThrow()
+    // a factor in the table of the viewer (sphaeroptica: m = 1)
+    const meters = { px: 1, m: 1, dm: 0.1, cm: 0.01, mm: 0.001, µm: 1e-6, nm: 1e-9 }
+    expect(readAnnotationsFile({ A: { scale: 0.001 } }, { scales: meters })).toEqual({ A: { scale: { unit: "mm", factor: 0.001 } } })
+  })
+
   it("reads the scale as a unit, a factor or { unit, factor }", () => {
     expect([readScaleUnit("cm"), readScaleUnit(10), readScaleUnit(1), readScaleUnit({ unit: "µm", factor: 0.001 })])
       .toEqual(["cm", "cm", "mm", "µm"])
@@ -507,7 +542,7 @@ describe("old saves", () => {
 
   it("reads only what a file has, the rest is kept", () => {
     const annotations = new Annotations()
-    annotations.merge({ scale_factor: 2, scale: 10, landmarks: [landmark("a").toJSON()] })
+    annotations.merge({ scaleFactor: 2, scale: { unit: "cm", factor: 10 }, landmarks: [landmark("a").toJSON()] })
     annotations.merge({ distances: [] })
     annotations.merge({})
     expect([annotations.landmarks.length, annotations.distances.length, annotations.adjustFactor, annotations.scale])
@@ -547,5 +582,50 @@ describe("coreLandmarks", () => {
     })
     await nextTick()
     expect([asked.length, annotations.allLandmarks.length, annotations.coreLandmarks.length]).toEqual([1, 2, 1])
+  })
+})
+
+describe("tolerant import", () => {
+  const good = () => landmark("good").toJSON()
+
+  it("reads a section that is missing, null or of another type as empty", () => {
+    const annotations = new Annotations()
+    annotations.merge({ landmarks: null, distances: "none", polygons: { a: 1 }, boxes: 3 } as any)
+    annotations.merge(null as any)
+    annotations.merge("text" as any)
+    expect([annotations.landmarks, annotations.distances, annotations.polygons, annotations.boxes]).toEqual([[], [], [], []])
+  })
+
+  it("skips the items that can't be read, keeps the others", () => {
+    const annotations = new Annotations()
+    annotations.merge({
+      landmarks: [good(), null, "x", { id: "no pose" }, { ...good(), id: "bad marker", pose: { marker: { x: "1", y: 2 }, image: { name: "i0" } } }],
+      distances: [{ label: "d", color: "#00ff00", landmarks: [good(), { id: "no pose" }] }, 7],
+    } as any)
+    expect(annotations.landmarks.map((l) => l.id)).toEqual(["good"])
+    // the distance keeps its landmark that can be read
+    expect(annotations.distances.map((d) => d.landmarks.length)).toEqual([1])
+  })
+
+  it("fills what a landmark lacks but its pose", () => {
+    const { pose } = good()
+    const annotations = new Annotations()
+    annotations.merge({ landmarks: [{ pose: { marker: pose.marker, image: { name: "i0" } }, color: "not a color", position: "far" }] } as any)
+    const [read] = annotations.landmarks
+    expect(read!.id).toMatch(/.+/)
+    expect([read!.label, read!.position, read!.pose.image.label]).toEqual([read!.id, null, "i0"])
+    expect(read!.getColorHEX()).toMatch(/^#[0-9A-F]{6}$/)
+  })
+
+  it("ignores the sections and acquisitions it doesn't know, and reads a newer version", () => {
+    const project = new Project("A1", [acquisition("VIS")])
+    const file = {
+      format: ANNOTATIONS_FORMAT, version: 99, viewer: "spectraloptica",
+      acquisitions: { VIS: { landmarks: [good()], ellipses: [{ any: "thing" }] }, IR: { landmarks: [good()] }, UV: null },
+    }
+    project.importAnnotationsFile(file, { viewer: "spectraloptica" })
+    expect(project.getAcquisition("VIS")!.annotations.landmarks.map((l) => l.id)).toEqual(["good"])
+    project.importAnnotationsFile({ format: ANNOTATIONS_FORMAT, version: 1, acquisitions: null })
+    project.importAnnotations("text" as any)
   })
 })

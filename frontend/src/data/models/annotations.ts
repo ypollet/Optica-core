@@ -1,8 +1,9 @@
 import type Color from "color"
 import { round } from "mathjs"
 import { reactive } from "vue"
-import { adjustFactorFor, randomID, readScaleUnit, ROUNDING, Scale, type ScaleUnit } from "../../lib/utils"
+import { adjustFactorFor, isScaleUnit, randomID, ROUNDING, Scale, type ScaleUnit } from "../../lib/utils"
 import { hasUnknownZ, is3D, type Coordinates, type Position } from "./coordinates"
+import { isRecord, readList } from "../../lib/saved"
 import { Distance, type DistanceObject } from "./distance"
 import { Landmark, type LandmarkObject, type Pose } from "./landmark"
 import { Polygon, type PolygonObject } from "./polygon"
@@ -29,23 +30,22 @@ export type BoundingBoxAnnotationObject = BoundingBoxObject & {
 }
 
 // Unit of the measures of a save, with its size in the unit of the positions (Scale), so a reader doesn't
-// need the Scale values: a position in the unit is position × scale_factor / factor (px: the pose markers)
+// need the Scale values: a position in the unit is position × scaleFactor / factor (px: the pose markers)
 export type SavedScale = {
     unit: ScaleUnit
     factor: number
 }
 
-// Saved form of the annotations of an acquisition. merge reads any part of it: only the fields a file has
-// (scale_factor: key of the first polar exports; scale: SavedScale, or only its unit or its factor in
-// older saves, see readScaleUnit)
+// Saved form of the annotations of an acquisition, in the acquisitions of an AnnotationsFile
+// (the exports made before it are upgraded by readAnnotationsFile). merge reads any part of it:
+// only the fields a file has
 export type AnnotationsObject = {
-    scale_factor: number
-    scale?: SavedScale | ScaleUnit | number
+    scaleFactor: number
+    scale: SavedScale
     landmarks: LandmarkObject[]
     distances: DistanceAnnotationObject[]
-    // missing from the saves made before the polygons
-    polygons?: PolygonAnnotationObject[]
-    boxes?: BoundingBoxAnnotationObject[]
+    polygons: PolygonAnnotationObject[]
+    boxes: BoundingBoxAnnotationObject[]
 }
 
 // Sidebar state of the annotations: kept across reloads, not exported
@@ -83,7 +83,7 @@ export const DEFAULT_CSV_HEADER = [...LANDMARK_CSV_HEADER, ...POSE_CSV_HEADER, .
 
 // a landmark saved with its position in the unit of the measures (ignored when loaded)
 export type ScaledLandmarkObject = LandmarkObject & {
-    scaled_position: Position | null
+    scaledPosition: Position | null
 }
 
 // one CSV row (DEFAULT_CSV_HEADER), `group`: label of the distance, polygon, box or profile of the landmark
@@ -418,13 +418,13 @@ export class Annotations implements AnnotationsSet {
 
     // the landmark saved with its scaled position
     protected landmarkToJSON(landmark: Landmark): ScaledLandmarkObject {
-        return { ...landmark.toJSON(), scaled_position: this.scaledPosition(landmark) }
+        return { ...landmark.toJSON(), scaledPosition: this.scaledPosition(landmark) }
     }
 
     toJSON(): AnnotationsObject {
         const landmarks = (measure: { landmarks: Landmark[] }) => measure.landmarks.map((landmark) => this.landmarkToJSON(landmark))
         return {
-            scale_factor: this.adjustFactor,
+            scaleFactor: this.adjustFactor,
             scale: { unit: this.scale, factor: Scale[this.scale] },
             landmarks: this.landmarks.map((landmark) => this.landmarkToJSON(landmark)),
             distances: this.distances.map((distance) => ({
@@ -461,14 +461,18 @@ export class Annotations implements AnnotationsSet {
     }
 
     // Adds saved annotations to these ones (import).
-    // Landmarks of old exports have no position: recompute it with the repository (recomputePositions).
-    // Only what the file has is read, the rest is kept
+    // A landmark saved during the computation of its position has none: recompute it with the repository
+    // (recomputePositions). Only what the file has is read, the rest is kept; a section that is missing, null
+    // or not a list is empty, an item that can't be read is skipped and unknown sections are ignored (lib/saved)
     merge(object: Partial<AnnotationsObject>) {
+        if (!isRecord(object)) {
+            return
+        }
         const used = new Set(this.allLandmarks.map((landmark) => landmark.id))
-        const landmarks = (object.landmarks ?? []).map((landmark) => Landmark.fromJSON(landmark))
-        const distances = (object.distances ?? []).map((distance) => Distance.fromJSON(distance))
-        const polygons = (object.polygons ?? []).map((polygon) => Polygon.fromJSON(polygon))
-        const boxes = (object.boxes ?? []).map((box) => BoundingBox.fromJSON(box))
+        const landmarks = readList(object.landmarks, Landmark.fromJSON, "landmark")
+        const distances = readList(object.distances, Distance.fromJSON, "distance")
+        const polygons = readList(object.polygons, Polygon.fromJSON, "polygon")
+        const boxes = readList(object.boxes, BoundingBox.fromJSON, "bounding box")
         this.claimIDs([
             ...landmarks,
             ...distances.flatMap((distance) => distance.landmarks),
@@ -479,12 +483,11 @@ export class Annotations implements AnnotationsSet {
         this.distances.push(...distances)
         this.polygons.push(...polygons)
         this.boxes.push(...boxes)
-        if (typeof object.scale_factor === "number") {
-            this.adjustFactor = object.scale_factor
+        if (typeof object.scaleFactor === "number") {
+            this.adjustFactor = object.scaleFactor
         }
-        const unit = readScaleUnit(object.scale)
-        if (unit) {
-            this.scale = unit
+        if (isScaleUnit(object.scale?.unit)) {
+            this.scale = object.scale.unit
         }
     }
 

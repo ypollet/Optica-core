@@ -1,7 +1,8 @@
 import Color from "color"
 import type { Coordinates, Position } from "./coordinates"
 import { imageRef, type ImageRef } from "./image"
-import { randomColorRGB } from "../../lib/utils"
+import { randomColorRGB, randomID } from "../../lib/utils"
+import { isFiniteNumber, isRecord, readColor, readLabel } from "../../lib/saved"
 
 export type Pose = {
     marker: Coordinates
@@ -44,9 +45,18 @@ export class Landmark {
         return this.id == other.id
     }
 
-    // the position may be missing from old exports: null, to be recomputed (Annotations.recomputePositions)
-    static fromJSON(landmark : LandmarkObject){
-        return new Landmark(landmark.id, landmark.label, landmark.pose, landmark.position ?? null, Color(landmark.color))
+    // A saved landmark. Only its pose is needed (throws without it): a new id when it has none, the id as label,
+    // a random color, and no position when it has none (null, to be recomputed: Annotations.recomputePositions)
+    static fromJSON(landmark : LandmarkObject | Record<string, any>){
+        const pose = landmark.pose
+        if (!isRecord(pose) || !isRecord(pose.marker) || !isFiniteNumber(pose.marker.x) || !isFiniteNumber(pose.marker.y)
+            || !isRecord(pose.image) || typeof pose.image.name != "string") {
+            throw new Error("landmark without a pose")
+        }
+        const id = typeof landmark.id == "string" && landmark.id != "" ? landmark.id : randomID()
+        const image = { ...pose.image, label: readLabel(pose.image.label, pose.image.name) } as ImageRef
+        return new Landmark(id, readLabel(landmark.label, id), { marker: { x: pose.marker.x, y: pose.marker.y }, image },
+            readPosition(landmark.position), readColor(landmark.color))
     }
 
     toJSON() : LandmarkObject {
@@ -72,4 +82,15 @@ export class Landmark {
             image : imageRef(image)
         }
     }
+}
+
+// a saved position: x, y and an optional z (null: unknown), null when it can't be read
+function readPosition(value: unknown): Position | null {
+    if (!isRecord(value) || !isFiniteNumber(value.x) || !isFiniteNumber(value.y)) {
+        return null
+    }
+    if (isFiniteNumber(value.z)) {
+        return { x: value.x, y: value.y, z: value.z }
+    }
+    return value.z === null ? { x: value.x, y: value.y, z: null } : { x: value.x, y: value.y }
 }

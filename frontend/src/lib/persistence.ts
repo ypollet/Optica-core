@@ -1,9 +1,11 @@
 import { watch } from "vue"
 import type { Acquisition, Project } from "../data/models/project"
+import { annotationsFile, readAnnotationsFile, type AnnotationsFile } from "./annotationsFile"
+import type { ScaleUnit } from "./utils"
 
-// What is stored: the annotations (same as an export) and the sidebar state, by acquisition id
+// What is stored: the annotations (an export, without the viewer) and the sidebar state, by acquisition id
 type SavedAnnotations = {
-    annotations: Record<string, object>
+    annotations: AnnotationsFile
     selection: Record<string, object>
 }
 
@@ -12,9 +14,9 @@ type SavedAnnotations = {
 // The project itself is loaded again from the backend: only the annotations are saved.
 // Call it in a component setup, `project` returns the project of the store.
 // onRestored: called once saved annotations are put back (recompute the positions lost by a reload
-// during their computation)
+// during their computation); scales: the sizes of the units of the viewer, if not Scale (readAnnotationsFile)
 export function usePersistedAnnotations(project: () => Project<any, any> | null | undefined,
-    { storage = sessionStorage, onRestored }: { storage?: Storage, onRestored?: () => void } = {}) {
+    { storage = sessionStorage, onRestored, scales }: { storage?: Storage, onRestored?: () => void, scales?: Record<ScaleUnit, number> } = {}) {
     const key = (objectPath: string) => `annotations:${objectPath}`
 
     // a project was loaded: put its saved annotations back
@@ -28,7 +30,8 @@ export function usePersistedAnnotations(project: () => Project<any, any> | null 
                 return
             }
             const object = JSON.parse(saved) as Partial<SavedAnnotations>
-            loaded.importAnnotations(object.annotations ?? {}, true)
+            // saved by an older version of the viewer: upgraded like an old export
+            loaded.importAnnotations(readAnnotationsFile(object.annotations ?? {}, { scales }), true)
             Object.entries(object.selection ?? {}).forEach(([id, selection]) => {
                 loaded.getAcquisition(id)?.annotations.setSelection(selection)
             })
@@ -48,7 +51,7 @@ export function usePersistedAnnotations(project: () => Project<any, any> | null 
             return undefined
         }
         const saved: SavedAnnotations = {
-            annotations: loaded.annotationsToJSON(),
+            annotations: annotationsFile(loaded),
             selection: Object.fromEntries(loaded.acquisitions.map((acquisition) => [acquisition.id, acquisition.annotations.getSelection()])),
         }
         return { objectPath: loaded.objectPath, json: JSON.stringify(saved) }

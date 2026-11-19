@@ -1,5 +1,6 @@
 import Color from "color"
 import { Landmark, type LandmarkObject } from "./landmark"
+import { readColor, readLabel, readList } from "../../lib/saved"
 import { fillUnknownZOnPlane, is3D, type Position } from "./coordinates"
 import { sumOfSegments } from "./distance"
 import { randomColorRGB, type ScaleUnit } from "../../lib/utils"
@@ -81,8 +82,9 @@ export class Polygon {
         return { label: this.label, color: this.color.hex(), landmarks: this.landmarks.map((x) => x.toJSON()) }
     }
 
-    static fromJSON(jsonObject: PolygonObject) {
-        let landmarks = jsonObject.landmarks.map((landmarkObject) => Landmark.fromJSON(landmarkObject))
-        return new Polygon(jsonObject.label, landmarks, Color(jsonObject.color))
+    // a saved polygon: its landmarks that can be read, a random color when it has none
+    static fromJSON(jsonObject: PolygonObject | Record<string, any>) {
+        const landmarks = readList(jsonObject.landmarks, Landmark.fromJSON, "landmark")
+        return new Polygon(readLabel(jsonObject.label), landmarks, readColor(jsonObject.color))
     }
 }

@@ -152,7 +152,7 @@ def images(self, id):
     ), unit=manifest["unit"])
 ```
 
-`ProjectRepository` reads it as is. Until a backend is migrated, pass a parser for its old payload: `new ProjectRepository(provider, (data) => [{ id: "rotation", images: data.rotationImages, size: data.size }])` (see `frontend/tests/project.test.ts` for spectral and depth).
+`ProjectRepository` reads it as is; the Flask backends and the Orthanc plugin both send it. A backend with another payload can still pass a parser: `new ProjectRepository(provider, (data) => [{ id: "rotation", images: data.rotationImages, size: data.size }])` (see `frontend/tests/project.test.ts`).
 
 ### Annotations
 

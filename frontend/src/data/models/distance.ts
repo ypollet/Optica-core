@@ -1,5 +1,6 @@
 import Color from "color"
 import { Landmark, type LandmarkObject } from "./landmark"
+import { readColor, readLabel, readList } from "../../lib/saved"
 import { distanceVector, fillUnknownZ, fillUnknownZOnPlane, type Position } from "./coordinates"
 import { computeDistance, randomColorRGB, type ScaleUnit } from "../../lib/utils"
 
@@ -82,8 +83,9 @@ export class Distance {
         return { label: this.label, color: this.color.hex(), landmarks : this.landmarks.map((x) => x.toJSON())}
     }
 
-    static fromJSON(jsonObject : DistanceObject) {
-        let landmarks = jsonObject.landmarks.map((landmarkObject) => Landmark.fromJSON(landmarkObject))
-        return new Distance(jsonObject.label, landmarks, Color(jsonObject.color))
+    // a saved distance: its landmarks that can be read, a random color when it has none
+    static fromJSON(jsonObject: DistanceObject | Record<string, any>) {
+        const landmarks = readList(jsonObject.landmarks, Landmark.fromJSON, "landmark")
+        return new Distance(readLabel(jsonObject.label), landmarks, readColor(jsonObject.color))
     }
 }

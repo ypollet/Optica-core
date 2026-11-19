@@ -1,6 +1,8 @@
 import { Annotations, type AnnotationsSet } from "./annotations"
 import { createCamera, type Camera } from "./camera"
 import type { ProjectImage, Size } from "./image"
+import { readAnnotationsFile, type ReadOptions } from "../../lib/annotationsFile"
+import { isRecord, readRecord } from "../../lib/saved"
 
 // One acquisition as sent by the backend
 export type AcquisitionObject<TImage extends ProjectImage = ProjectImage> = {
@@ -169,24 +171,27 @@ export class Project<TImage extends ProjectImage = ProjectImage, TAcquisition ex
         return Object.fromEntries(this.acquisitions.map((acquisition) => [acquisition.id, acquisition.annotations.toJSON()])) as Record<string, ReturnType<TAcquisition["annotations"]["toJSON"]>>
     }
 
-    // Reads annotationsToJSON(), or the annotations of a single acquisition (exports made before
-    // the acquisitions, told by their "landmarks" or "distances") which go to the selected one.
+    // Reads annotationsToJSON(): the annotations by acquisition id (readAnnotationsFile gives them from a file).
     // replace: restore instead of adding.
-    importAnnotations(object: Record<string, object> | object, replace: boolean = false) {
-        const apply = (acquisition: TAcquisition | undefined, annotations: object) => {
-            if (replace) {
-                acquisition?.annotations.restore(annotations)
-            } else {
-                acquisition?.annotations.merge(annotations)
+    importAnnotations(annotations: Record<string, object>, replace: boolean = false) {
+        Object.entries(readRecord(annotations, "acquisitions")).forEach(([id, object]) => {
+            // a set that isn't an object, or of an acquisition the project doesn't have, is ignored
+            if (!isRecord(object)) {
+                return
             }
-        }
-        if ("landmarks" in object || "distances" in object) {
-            apply(this.acquisition, object)
-            return
-        }
-        Object.entries(object as Record<string, object>).forEach(([id, annotations]) => {
-            apply(this.getAcquisition(id), annotations)
+            const acquisition = this.getAcquisition(id)
+            if (replace) {
+                acquisition?.annotations.restore(object)
+            } else {
+                acquisition?.annotations.merge(object)
+            }
         })
+    }
+
+    // Reads an annotations file (an export, current or old, see readAnnotationsFile).
+    // The annotations of the exports made before the acquisitions go to the selected one
+    importAnnotationsFile(object: unknown, { replace = false, ...options }: Omit<ReadOptions, "acquisition"> & { replace?: boolean } = {}) {
+        this.importAnnotations(readAnnotationsFile(object, { ...options, acquisition: this.acquisition?.id }), replace)
     }
 
     // one row per landmark of every acquisition, with a header (the one of the annotations of the first acquisition)

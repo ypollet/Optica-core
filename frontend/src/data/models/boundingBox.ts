@@ -1,5 +1,6 @@
 import Color from "color"
 import { Landmark, type LandmarkObject } from "./landmark"
+import { readColor, readLabel, readList } from "../../lib/saved"
 import type { Coordinates } from "./coordinates"
 import { randomColorRGB, type ScaleUnit } from "../../lib/utils"
 
@@ -92,8 +93,9 @@ export class BoundingBox {
         return { label: this.label, color: this.color.hex(), landmarks: this.landmarks.map((x) => x.toJSON()) }
     }
 
-    static fromJSON(jsonObject: BoundingBoxObject) {
-        let landmarks = jsonObject.landmarks.map((landmarkObject) => Landmark.fromJSON(landmarkObject))
-        return new BoundingBox(jsonObject.label, landmarks, Color(jsonObject.color))
+    // a saved boundingBox: its landmarks that can be read, a random color when it has none
+    static fromJSON(jsonObject: BoundingBoxObject | Record<string, any>) {
+        const landmarks = readList(jsonObject.landmarks, Landmark.fromJSON, "landmark")
+        return new BoundingBox(readLabel(jsonObject.label), landmarks, readColor(jsonObject.color))
     }
 }
